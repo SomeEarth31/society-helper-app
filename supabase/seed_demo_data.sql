@@ -74,6 +74,12 @@ BEGIN
   IF v_society_id IS NULL THEN
     -- Deterministic society id so re-runs of the seed don't drift.
     v_society_id := '99999999-9999-9999-9999-000000000001';
+
+    -- Must insert the society row first or the FK on profiles will reject the update.
+    INSERT INTO societies (id, name)
+    VALUES (v_society_id, '[DEMO] Sunrise Apartments')
+    ON CONFLICT (id) DO NOTHING;
+
     UPDATE profiles SET society_id = v_society_id WHERE id = v_user_id;
   END IF;
 
@@ -81,33 +87,32 @@ BEGIN
   -- 3. Workers (all tagged [DEMO] for the cleanup script).
   --    Pravatar URLs give us free, varied headshots.
   -- ──────────────────────────────────────────────────────────
-  INSERT INTO workers (id, society_id, full_name, phone, specialty, daily_rate, trust_score, photo_url) VALUES
-    (w_lakshmi, v_society_id, '[DEMO] Lakshmi Devi',    '+919900000001', 'maid',     350, 4.8, 'https://i.pravatar.cc/300?img=47'),
-    (w_ramesh,  v_society_id, '[DEMO] Ramesh Kumar',    '+919900000002', 'cook',     500, 4.6, 'https://i.pravatar.cc/300?img=68'),
-    (w_priya,   v_society_id, '[DEMO] Priya Sharma',    '+919900000003', 'nanny',    600, 4.9, 'https://i.pravatar.cc/300?img=44'),
-    (w_arjun,   v_society_id, '[DEMO] Arjun Singh',     '+919900000004', 'driver',   800, 4.4, 'https://i.pravatar.cc/300?img=12'),
-    (w_meera,   v_society_id, '[DEMO] Meera Patel',     '+919900000005', 'maid',     320, 4.2, 'https://i.pravatar.cc/300?img=23'),
-    (w_suresh,  v_society_id, '[DEMO] Suresh Yadav',    '+919900000006', 'gardener', 250, 4.0, 'https://i.pravatar.cc/300?img=15')
+  INSERT INTO workers (id, society_id, full_name, phone, specialty, monthly_rate, trust_score, photo_url) VALUES
+    (w_lakshmi, v_society_id, '[DEMO] Lakshmi Devi',    '+919900000001', 'maid',      7000,  4.8, 'https://i.pravatar.cc/300?img=47'),
+    (w_ramesh,  v_society_id, '[DEMO] Ramesh Kumar',    '+919900000002', 'cook',     12000,  4.6, 'https://i.pravatar.cc/300?img=68'),
+    (w_priya,   v_society_id, '[DEMO] Priya Sharma',    '+919900000003', 'caretaker', 15000, 4.9, 'https://i.pravatar.cc/300?img=44'),
+    (w_arjun,   v_society_id, '[DEMO] Arjun Singh',     '+919900000004', 'other',     18000, 4.4, 'https://i.pravatar.cc/300?img=12'),
+    (w_meera,   v_society_id, '[DEMO] Meera Patel',     '+919900000005', 'maid',      6500,  4.2, 'https://i.pravatar.cc/300?img=23'),
+    (w_suresh,  v_society_id, '[DEMO] Suresh Yadav',    '+919900000006', 'gardener',  5500,  4.0, 'https://i.pravatar.cc/300?img=15')
   ON CONFLICT (id) DO UPDATE SET
-    society_id  = EXCLUDED.society_id,
-    full_name   = EXCLUDED.full_name,
-    phone       = EXCLUDED.phone,
-    specialty   = EXCLUDED.specialty,
-    daily_rate  = EXCLUDED.daily_rate,
-    trust_score = EXCLUDED.trust_score,
-    photo_url   = EXCLUDED.photo_url;
+    society_id   = EXCLUDED.society_id,
+    full_name    = EXCLUDED.full_name,
+    phone        = EXCLUDED.phone,
+    specialty    = EXCLUDED.specialty,
+    monthly_rate = EXCLUDED.monthly_rate,
+    trust_score  = EXCLUDED.trust_score,
+    photo_url    = EXCLUDED.photo_url;
 
   -- ──────────────────────────────────────────────────────────
   -- 4. Active engagements — Lakshmi (maid) and Ramesh (cook).
   --    These show up on the dashboard's helper list.
   -- ──────────────────────────────────────────────────────────
-  INSERT INTO engagements (id, employer_id, worker_id, society_id, monthly_salary, service_type, status) VALUES
-    (e_lakshmi, v_user_id, w_lakshmi, v_society_id, 8000,  'maid', 'active'),
-    (e_ramesh,  v_user_id, w_ramesh,  v_society_id, 12000, 'cook', 'active')
+  INSERT INTO engagements (id, employer_id, worker_id, monthly_salary, service_type, status) VALUES
+    (e_lakshmi, v_user_id, w_lakshmi, 8000,  'maid', 'active'),
+    (e_ramesh,  v_user_id, w_ramesh,  12000, 'cook', 'active')
   ON CONFLICT (id) DO UPDATE SET
     employer_id    = EXCLUDED.employer_id,
     worker_id      = EXCLUDED.worker_id,
-    society_id     = EXCLUDED.society_id,
     monthly_salary = EXCLUDED.monthly_salary,
     service_type   = EXCLUDED.service_type,
     status         = EXCLUDED.status;
@@ -129,13 +134,13 @@ BEGIN
   -- Lakshmi: 11 full days + 1 half day = 11.5 days worked
   INSERT INTO attendance (engagement_id, date, status)
   SELECT e_lakshmi, v_month_start + (d - 1),
-         CASE WHEN d = 8 THEN 'half_day' ELSE 'present' END
+         (CASE WHEN d = 8 THEN 'half_day' ELSE 'present' END)::attendance_status
   FROM generate_series(1, 12) AS d;
 
   -- Ramesh: 9 present days + 1 absent
   INSERT INTO attendance (engagement_id, date, status)
   SELECT e_ramesh, v_month_start + (d - 1),
-         CASE WHEN d = 5 THEN 'absent' ELSE 'present' END
+         (CASE WHEN d = 5 THEN 'absent' ELSE 'present' END)::attendance_status
   FROM generate_series(1, 10) AS d;
 
   -- ──────────────────────────────────────────────────────────
@@ -145,16 +150,16 @@ BEGIN
   -- ──────────────────────────────────────────────────────────
   INSERT INTO payments
     (id, engagement_id, amount, period_start, period_end,
-     days_worked, nodal_vpa, upi_txn_ref, utr, status)
+     days_worked, nodal_vpa, upi_txn_ref, status)
   VALUES
     (p_old, e_lakshmi, 7500,
      (v_month_start - interval '1 month')::date,
      (v_month_start - interval '1 day')::date,
-     26, 'samarth@upi', 'SHDEMO0001AAAA', '412345678901', 'completed'),
+     26, 'samarth@upi', 'SHDEMO0001AAAA', 'completed'),
     (p_recent, e_ramesh, 4000,
      v_month_start,
      (v_month_start + interval '1 month' - interval '1 day')::date,
-     10, 'samarth@upi', 'SHDEMO0002BBBB', NULL, 'initiated')
+     10, 'samarth@upi', 'SHDEMO0002BBBB', 'initiated')
   ON CONFLICT (id) DO UPDATE SET
     engagement_id = EXCLUDED.engagement_id,
     amount        = EXCLUDED.amount,
@@ -163,7 +168,6 @@ BEGIN
     days_worked   = EXCLUDED.days_worked,
     nodal_vpa     = EXCLUDED.nodal_vpa,
     upi_txn_ref   = EXCLUDED.upi_txn_ref,
-    utr           = EXCLUDED.utr,
     status        = EXCLUDED.status;
 
   -- ──────────────────────────────────────────────────────────
