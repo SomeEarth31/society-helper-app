@@ -196,3 +196,23 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ============================================================
+-- HELPER: check if an email is already registered
+-- Used by the login page for smart routing (no OTP side-effect)
+-- ============================================================
+create or replace function public.email_exists(check_email text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return exists (
+    select 1 from auth.users
+    where email = lower(trim(check_email))
+  );
+end;
+$$;
+
+grant execute on function public.email_exists(text) to anon, authenticated;

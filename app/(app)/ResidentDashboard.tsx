@@ -1,13 +1,9 @@
 /**
- * Resident (Employer) Dashboard — extracted from the original
- * app/(app)/page.tsx. Renders greeting, month-to-date dues, and
- * the list of active engagements with attendance + settle controls.
- *
- * This is a server component; it expects the parent to have already
- * authenticated the user and to pass the profile in as a prop.
+ * Resident Dashboard — Modern UI (Urban Company / Uber style).
+ * Server component; parent passes profile as prop.
  */
 import Link from 'next/link'
-import { Users, IndianRupee, CalendarCheck, ChevronRight } from 'lucide-react'
+import { Users, IndianRupee, CalendarCheck, ChevronRight, Plus } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
 import AttendanceToggle from '@/components/AttendanceToggle'
 import PaymentButton from '@/components/PaymentButton'
@@ -49,13 +45,14 @@ export default async function ResidentDashboard({
 
   const engagementIds = (engagements ?? []).map(e => e.id)
 
-  const today = new Date()
+  const today     = new Date()
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
   const monthEnd   = new Date(today.getFullYear(), today.getMonth() + 1, 0)
   const todayStr   = today.toISOString().slice(0, 10)
   const startStr   = monthStart.toISOString().slice(0, 10)
   const endStr     = monthEnd.toISOString().slice(0, 10)
   const daysInMonth = monthEnd.getDate()
+  const monthLabel  = monthStart.toLocaleString('en-IN', { month: 'long', year: 'numeric' })
 
   let attendance: AttendanceRow[] = []
   if (engagementIds.length) {
@@ -83,44 +80,60 @@ export default async function ResidentDashboard({
     return sum + computeDues(e.monthly_salary, s.daysWorked, daysInMonth)
   }, 0)
 
+  const firstName = profile?.full_name?.split(' ')[0] ?? 'Resident'
+  const initials  = (profile?.full_name ?? 'R')
+    .split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase()
+
   return (
-    <main className="min-h-screen bg-neutral-50 pb-24">
-      <header className="bg-white border-b border-neutral-200 px-5 pt-7 pb-5">
-        <p className="text-sm text-neutral-500">Namaste 👋</p>
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-          {profile?.full_name ?? 'Resident'}
-        </h1>
-        {profile?.flat_number && (
-          <p className="mt-0.5 text-xs text-neutral-500">Flat {profile.flat_number}</p>
-        )}
+    <main className="min-h-screen bg-slate-50 pb-24">
+
+      {/* ── Gradient header ── */}
+      <header className="bg-gradient-to-br from-violet-700 to-violet-500 px-5 pt-14 pb-16">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-violet-200 text-xs mb-0.5">Namaste 👋</p>
+            <h1 className="text-2xl font-bold text-white">{firstName}</h1>
+            {profile?.flat_number && (
+              <p className="text-violet-200 text-xs mt-0.5">Flat {profile.flat_number}</p>
+            )}
+          </div>
+          <div className="h-11 w-11 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center">
+            <span className="text-white font-bold text-sm">{initials}</span>
+          </div>
+        </div>
       </header>
 
-      <section className="px-5 -mt-4">
-        <div className="rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-5 text-white shadow-md">
-          <p className="text-[11px] uppercase tracking-wider opacity-80">
-            {monthStart.toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
-          </p>
-          <div className="mt-3 flex items-end justify-between">
+      {/* ── Stats card (overlaps header) ── */}
+      <section className="px-5 -mt-10">
+        <div className="rounded-3xl bg-white shadow-lg shadow-violet-100 border border-slate-100 p-5">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs opacity-80">Dues so far</p>
-              <p className="mt-1 text-3xl font-bold flex items-center">
-                <IndianRupee size={22} className="mr-0.5" />
+              <p className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">
+                {monthLabel} · Dues so far
+              </p>
+              <p className="mt-1 text-3xl font-bold text-slate-900 flex items-center gap-0.5">
+                <IndianRupee size={22} strokeWidth={2.5} className="text-violet-600" />
                 {totalDues.toLocaleString('en-IN')}
               </p>
             </div>
-            <div className="text-right space-y-1">
-              <Stat icon={Users} value={engagements?.length ?? 0} label="Helpers" />
-              <Stat icon={CalendarCheck} value={attendance.length} label="Marks" />
+            <div className="space-y-2.5">
+              <StatPill icon={Users} value={engagements?.length ?? 0} label="Helpers" />
+              <StatPill icon={CalendarCheck} value={attendance.length} label="Marks" />
             </div>
           </div>
         </div>
       </section>
 
+      {/* ── Helpers list ── */}
       <section className="px-5 mt-7">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-neutral-700">Your Helpers</h2>
-          <Link href="/directory" className="text-xs font-medium text-indigo-600">
-            Hire more →
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-bold text-slate-900">Your Helpers</h2>
+          <Link
+            href="/directory"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 bg-violet-50 rounded-full px-3 py-1.5"
+          >
+            <Plus size={12} />
+            Hire
           </Link>
         </div>
 
@@ -129,39 +142,48 @@ export default async function ResidentDashboard({
         ) : (
           <ul className="space-y-3">
             {engagements.map(e => {
-              const s = stats.get(e.id)!
+              const s    = stats.get(e.id)!
               const dues = computeDues(e.monthly_salary, s.daysWorked, daysInMonth)
               return (
-                <li key={e.id} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+                <li key={e.id} className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
+
+                  {/* Worker info row */}
                   <Link href={`/engagement/${e.id}`} className="flex items-center gap-3 group">
                     <Avatar name={e.worker.full_name} url={e.worker.photo_url} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-neutral-900">{e.worker.full_name}</p>
-                      <p className="text-xs text-neutral-500 capitalize">
-                        {e.worker.specialty.replace('_', ' ')} • ★ {e.worker.trust_score.toFixed(1)}
+                      <p className="font-semibold text-slate-900 truncate">{e.worker.full_name}</p>
+                      <p className="text-xs text-slate-500 capitalize mt-0.5">
+                        {e.worker.specialty.replace('_', ' ')}
+                        <span className="mx-1.5 text-slate-300">·</span>
+                        <span className="text-amber-500 font-medium">★ {e.worker.trust_score.toFixed(1)}</span>
                       </p>
                     </div>
-                    <ChevronRight size={18} className="text-neutral-300 group-hover:text-neutral-500" />
+                    <ChevronRight size={18} className="text-slate-300 group-hover:text-slate-500 transition" />
                   </Link>
 
-                  <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
+                  {/* Divider */}
+                  <div className="my-3.5 border-t border-slate-100" />
+
+                  {/* Attendance + dues row */}
+                  <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[11px] uppercase tracking-wider text-neutral-400">Today</p>
-                      <div className="mt-1">
-                        <AttendanceToggle engagementId={e.id} date={todayStr} initial={s.today} />
-                      </div>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium mb-1.5">
+                        Today
+                      </p>
+                      <AttendanceToggle engagementId={e.id} date={todayStr} initial={s.today} />
                     </div>
                     <div className="text-right">
-                      <p className="text-[11px] uppercase tracking-wider text-neutral-400">
-                        {s.daysWorked} of {daysInMonth} days
+                      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">
+                        {s.daysWorked} / {daysInMonth} days
                       </p>
-                      <p className="text-sm font-semibold text-neutral-900">
+                      <p className="mt-1 text-sm font-bold text-slate-900">
                         ₹{dues.toLocaleString('en-IN')} owed
                       </p>
                     </div>
                   </div>
 
-                  <div className="mt-3">
+                  {/* Pay button */}
+                  <div className="mt-3.5">
                     <PaymentButton
                       engagementId={e.id}
                       amount={dues}
@@ -181,24 +203,29 @@ export default async function ResidentDashboard({
   )
 }
 
-function Stat({ icon: Icon, value, label }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>
-  value: number; label: string
-}) {
+/* ── Sub-components ── */
+
+function StatPill({
+  icon: Icon, value, label,
+}: { icon: React.ComponentType<{ size?: number; className?: string }>; value: number; label: string }) {
   return (
-    <div className="flex items-center justify-end gap-1.5 text-xs/5 opacity-90">
-      <Icon size={12} />
-      <span className="font-semibold">{value}</span>
-      <span className="opacity-75">{label}</span>
+    <div className="flex items-center gap-1.5 text-xs text-slate-600">
+      <span className="h-6 w-6 rounded-lg bg-violet-50 flex items-center justify-center">
+        <Icon size={12} className="text-violet-600" />
+      </span>
+      <span className="font-semibold text-slate-900">{value}</span>
+      <span className="text-slate-400">{label}</span>
     </div>
   )
 }
 
 function Avatar({ name, url }: { name: string; url: string | null }) {
-  if (url) return <img src={url} alt={name} className="h-10 w-10 rounded-full object-cover" />
+  if (url) {
+    return <img src={url} alt={name} className="h-11 w-11 rounded-2xl object-cover" />
+  }
   const initials = name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase()
   return (
-    <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold">
+    <div className="h-11 w-11 rounded-2xl bg-violet-100 text-violet-700 flex items-center justify-center text-sm font-bold">
       {initials}
     </div>
   )
@@ -206,11 +233,18 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
 
 function EmptyState() {
   return (
-    <div className="rounded-2xl border border-dashed border-neutral-300 bg-white p-8 text-center">
-      <p className="text-sm text-neutral-600">No active helpers yet.</p>
-      <Link href="/directory"
-        className="mt-3 inline-block rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">
-        Browse the directory
+    <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-white p-10 text-center">
+      <div className="h-14 w-14 rounded-full bg-violet-50 flex items-center justify-center mx-auto mb-4">
+        <Users size={24} className="text-violet-400" />
+      </div>
+      <p className="font-semibold text-slate-700">No helpers yet</p>
+      <p className="text-sm text-slate-400 mt-1">Browse the directory to hire your first helper.</p>
+      <Link
+        href="/directory"
+        className="mt-4 inline-flex items-center gap-1.5 rounded-2xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm"
+      >
+        <Plus size={14} />
+        Browse directory
       </Link>
     </div>
   )

@@ -1,24 +1,23 @@
 /**
- * Login page — supports password sign-in, OTP login, and new sign-up via OTP.
- * Route: /login
+ * Login page — smart email routing + modern UI.
  *
  * Flow:
- *   • Email step → user enters email.
- *       - "Continue" tries password sign-in (if account has one).
- *       - "Login with OTP instead" sends a one-time code.
- *   • Password step → enter password → signInWithPassword.
- *   • OTP step → enter 6/8-digit code → verifyOtp.
- *   • Signup step → user enters email → OTP sent → verifyOtp → onboarding.
- *
- * After successful sign-in we route to / — the (app) layout will
- * bounce first-time users to /onboarding if their profile is incomplete.
+ *   • email step → "Continue" calls email_exists RPC (no side-effects)
+ *       - email found    → password step
+ *       - email NOT found → signup step with "no account found" banner
+ *   • password step → signInWithPassword  (OTP fallback available)
+ *   • otp step      → verifyOtp (existing user)
+ *   • signup step   → "Send code" first checks if email exists
+ *       - already exists → back to email step with "email matches, sign in" banner
+ *       - new email      → signInWithOtp (shouldCreateUser: true) → signup-otp
+ *   • signup-otp step → verifyOtp → onboarding
  */
 'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { IndianRupee, Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 
 type Step = 'email' | 'password' | 'otp' | 'signup' | 'signup-otp'
 
@@ -26,27 +25,48 @@ export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
 
-  const [step, setStep]       = useState<Step>('email')
-  const [email, setEmail]     = useState('')
+  const [step, setStep]             = useState<Step>('email')
+  const [email, setEmail]           = useState('')
   const [signupEmail, setSignupEmail] = useState('')
-  const [password, setPwd]    = useState('')
-  const [otp, setOtp]         = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState<string | null>(null)
-  const [info, setInfo]       = useState<string | null>(null)
+  const [password, setPwd]          = useState('')
+  const [otp, setOtp]               = useState('')
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState<string | null>(null)
+  const [info, setInfo]             = useState<string | null>(null)
 
-  /* ── Email step → reveal password input ── */
-  function handleEmailContinue(e: React.FormEvent) {
+  function clear() { setError(null); setInfo(null) }
+
+  /* ── Email step: smart routing via email_exists RPC ── */
+  async function handleEmailContinue(e: React.FormEvent) {
     e.preventDefault()
-    setError(null); setInfo(null)
     if (!email) return
-    setStep('password')
+    clear(); setLoading(true)
+
+    const { data: exists, error: rpcErr } = await supabase.rpc('email_exists', {
+      check_email: email,
+    })
+    setLoading(false)
+
+    if (rpcErr) {
+      // RPC unavailable (e.g. migration not yet run) — fall back gracefully
+      setStep('password')
+      return
+    }
+
+    if (exists) {
+      setStep('password')
+    } else {
+      // No account → send user to signup
+      setSignupEmail(email)
+      setInfo("No account found for this email. Create one below.")
+      setStep('signup')
+    }
   }
 
   /* ── Password sign-in ── */
   async function handlePasswordSignIn(e: React.FormEvent) {
     e.preventDefault()
-    setError(null); setLoading(true)
+    clear(); setLoading(true)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
     if (error) { setError(error.message); return }
@@ -54,25 +74,64 @@ export default function LoginPage() {
     router.refresh()
   }
 
-  /* ── OTP fallback: send code (for existing users logging in) ── */
+  /* ── OTP fallback for existing users ── */
   async function handleSendOtp() {
-    setError(null); setInfo(null); setLoading(true)
+    clear(); setLoading(true)
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { shouldCreateUser: false },
     })
     setLoading(false)
     if (error) { setError(error.message); return }
-    setInfo(`We sent a code to ${email}.`)
+    setInfo(`Code sent to ${email}.`)
     setStep('otp')
   }
 
-  /* ── OTP verify (login) ── */
+  /* ── OTP verify (existing user login) ── */
   async function handleVerifyOtp(e: React.FormEvent) {
     e.preventDefault()
-    setError(null); setLoading(true)
+    clear(); setLoading(true)
+    const { error } = await supabase.auth.verifyOtp({ email, token: otp, type: 'email' })
+    setLoading(false)
+    if (error) { setError(error.message); return }
+    router.replace('/')
+    router.refresh()
+  }
+
+  /* ── Signup: check first, then send OTP ── */
+  async function handleSignupSendOtp(e: React.FormEvent) {
+    e.preventDefault()
+    clear(); setLoading(true)
+
+    // Check whether this email already has an account
+    const { data: exists } = await supabase.rpc('email_exists', { check_email: signupEmail })
+
+    if (exists) {
+      // Already registered → redirect to sign-in with info banner
+      setEmail(signupEmail)
+      setInfo('Email matches — sign in below.')
+      setStep('email')
+      setLoading(false)
+      return
+    }
+
+    // New user — send OTP
+    const { error } = await supabase.auth.signInWithOtp({
+      email: signupEmail,
+      options: { shouldCreateUser: true },
+    })
+    setLoading(false)
+    if (error) { setError(error.message); return }
+    setInfo(`Code sent to ${signupEmail}.`)
+    setStep('signup-otp')
+  }
+
+  /* ── Signup: verify OTP → onboarding ── */
+  async function handleSignupVerifyOtp(e: React.FormEvent) {
+    e.preventDefault()
+    clear(); setLoading(true)
     const { error } = await supabase.auth.verifyOtp({
-      email,
+      email: signupEmail,
       token: otp,
       type: 'email',
     })
@@ -82,250 +141,212 @@ export default function LoginPage() {
     router.refresh()
   }
 
-  /* ── Signup: send OTP to new email ── */
-  async function handleSignupSendOtp(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null); setLoading(true)
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: signupEmail,
-        options: { shouldCreateUser: true },
-      })
-      if (error) { setError(error.message); return }
-      setInfo(`We sent a code to ${signupEmail}.`)
-      setStep('signup-otp')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+  /* ─────────── RENDER ─────────── */
+  const headings: Record<Step, string> = {
+    email:       'Welcome back',
+    password:    'Enter password',
+    otp:         'Check your email',
+    signup:      'Create account',
+    'signup-otp':'Verify your email',
   }
-
-  /* ── Signup: verify OTP → onboarding ── */
-  async function handleSignupVerifyOtp(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null); setLoading(true)
-    try {
-      const { error } = await supabase.auth.verifyOtp({
-        email: signupEmail,
-        token: otp,
-        type: 'email',
-      })
-      if (error) { setError(error.message); return }
-      router.replace('/')
-      router.refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+  const subtitles: Record<Step, string> = {
+    email:       'Enter your email to continue',
+    password:    `Signing in as ${email}`,
+    otp:         `We sent a code to ${email}`,
+    signup:      'Join Society Helper in seconds',
+    'signup-otp': `We sent a code to ${signupEmail}`,
   }
 
   return (
-    <main className="min-h-screen bg-neutral-50 flex flex-col items-center justify-center px-5">
-      <div className="flex items-center gap-2 mb-8">
-        <div className="h-10 w-10 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-sm">
-          <IndianRupee size={20} className="text-white" />
+    <main className="min-h-screen flex flex-col bg-slate-50">
+
+      {/* ── Brand header ── */}
+      <div className="bg-violet-600 px-6 pt-16 pb-14">
+        {/* Back button (visible on inner steps) */}
+        {step !== 'email' && (
+          <button
+            onClick={() => {
+              clear()
+              if (step === 'password' || step === 'otp') { setStep('email'); setPwd(''); setOtp('') }
+              else if (step === 'signup') setStep('email')
+              else if (step === 'signup-otp') { setStep('signup'); setOtp('') }
+            }}
+            className="mb-4 inline-flex items-center gap-1.5 text-violet-200 text-sm"
+          >
+            <ArrowLeft size={15} />
+            Back
+          </button>
+        )}
+
+        {/* Logo mark */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
+            <span className="text-white font-bold text-sm tracking-tight">SH</span>
+          </div>
+          <span className="text-white/80 font-medium text-sm">Society Helper</span>
         </div>
-        <span className="text-xl font-semibold text-neutral-900 tracking-tight">Society Helper</span>
+
+        <h1 className="text-3xl font-bold text-white leading-snug">
+          {headings[step]}
+        </h1>
+        <p className="mt-1.5 text-violet-200 text-sm">
+          {subtitles[step]}
+        </p>
       </div>
 
-      <div className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+      {/* ── Form card ── */}
+      <div className="flex-1 bg-white rounded-t-3xl -mt-5 px-6 pt-8 pb-12 shadow-[0_-4px_24px_rgba(109,40,217,0.1)]">
 
-        {/* ── Sign in: email ── */}
+        {/* Info banner */}
+        {info && (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl bg-violet-50 border border-violet-100 px-4 py-3.5">
+            <CheckCircle2 size={17} className="text-violet-600 mt-0.5 shrink-0" />
+            <p className="text-sm text-violet-800 leading-snug">{info}</p>
+          </div>
+        )}
+
+        {/* Error banner */}
+        {error && (
+          <div className="mb-6 flex items-start gap-3 rounded-2xl bg-rose-50 border border-rose-100 px-4 py-3.5">
+            <AlertCircle size={17} className="text-rose-500 mt-0.5 shrink-0" />
+            <p className="text-sm text-rose-700 leading-snug">{error}</p>
+          </div>
+        )}
+
+        {/* ── Email step ── */}
         {step === 'email' && (
-          <>
-            <h1 className="text-lg font-semibold text-neutral-900">Sign in</h1>
-            <p className="mt-1 text-sm text-neutral-500">
-              Use your email and password, or get a one-time code.
-            </p>
-            <form onSubmit={handleEmailContinue} className="mt-5 space-y-4">
-              <Field label="Email address">
-                <input
-                  type="email" required autoComplete="email"
-                  value={email} onChange={e => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className={inputCls}
-                />
-              </Field>
-              {error && <p className="text-xs text-rose-600">{error}</p>}
-              <button type="submit" className={primaryBtn}>Continue</button>
-              <button
-                type="button" onClick={handleSendOtp} disabled={!email || loading}
-                className={secondaryBtn}
-              >
-                {loading ? <Loader2 size={14} className="animate-spin" /> : null}
-                Login with OTP instead
-              </button>
-            </form>
+          <form onSubmit={handleEmailContinue} className="space-y-4">
+            <Field label="Email address">
+              <input
+                type="email" required autoComplete="email"
+                value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className={inputCls}
+              />
+            </Field>
+            <button type="submit" disabled={!email || loading} className={primaryBtn}>
+              {loading ? <Loader2 size={16} className="animate-spin" /> : 'Continue'}
+            </button>
 
-            <div className="mt-6 border-t border-neutral-100 pt-5">
-              <p className="text-center text-xs text-neutral-500 mb-3">Don&apos;t have an account?</p>
+            <div className="mt-6 pt-6 border-t border-slate-100 text-center space-y-1">
+              <p className="text-sm text-slate-500">New to Society Helper?</p>
               <button
                 type="button"
-                onClick={() => { setError(null); setStep('signup') }}
-                className={secondaryBtn}
+                onClick={() => { clear(); setStep('signup') }}
+                className="text-sm font-semibold text-violet-600 active:opacity-70"
               >
-                Create an account
+                Create an account →
               </button>
             </div>
-          </>
+          </form>
         )}
 
-        {/* ── Sign in: password ── */}
+        {/* ── Password step ── */}
         {step === 'password' && (
-          <>
-            <h1 className="text-lg font-semibold text-neutral-900">Enter password</h1>
-            <p className="mt-1 text-sm text-neutral-500">
-              Signing in as <span className="font-medium text-neutral-700">{email}</span>
-            </p>
-            <form onSubmit={handlePasswordSignIn} className="mt-5 space-y-4">
-              <Field label="Password">
-                <input
-                  type="password" required autoComplete="current-password"
-                  value={password} onChange={e => setPwd(e.target.value)}
-                  placeholder="••••••••"
-                  className={inputCls}
-                />
-              </Field>
-              {error && <p className="text-xs text-rose-600">{error}</p>}
-              <button type="submit" disabled={loading} className={primaryBtn}>
-                {loading ? 'Signing in…' : 'Sign in'}
-              </button>
-              <button type="button" onClick={handleSendOtp} disabled={loading} className={secondaryBtn}>
-                Login with OTP instead
-              </button>
-              <button
-                type="button"
-                onClick={() => { setStep('email'); setPwd(''); setError(null) }}
-                className="w-full text-xs text-neutral-500 hover:text-neutral-700"
-              >
-                ← Use a different email
-              </button>
-            </form>
-          </>
+          <form onSubmit={handlePasswordSignIn} className="space-y-4">
+            <Field label="Password">
+              <input
+                type="password" required autoComplete="current-password"
+                value={password} onChange={e => setPwd(e.target.value)}
+                placeholder="••••••••"
+                className={inputCls}
+              />
+            </Field>
+            <button type="submit" disabled={loading} className={primaryBtn}>
+              {loading ? <Loader2 size={16} className="animate-spin" /> : 'Sign in'}
+            </button>
+            <button
+              type="button" onClick={handleSendOtp} disabled={loading}
+              className={secondaryBtn}
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : null}
+              Get a one-time code instead
+            </button>
+          </form>
         )}
 
-        {/* ── Sign in: OTP verify ── */}
+        {/* ── OTP verify (login) ── */}
         {step === 'otp' && (
-          <>
-            <h1 className="text-lg font-semibold text-neutral-900">Enter your code</h1>
-            <p className="mt-1 text-sm text-neutral-500">
-              {info ?? `Check ${email} for the code.`}
-            </p>
-            <form onSubmit={handleVerifyOtp} className="mt-5 space-y-4">
-              <Field label="One-time code">
-                <input
-                  type="text" inputMode="numeric" required maxLength={8}
-                  value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-                  placeholder="12345678"
-                  className={`${inputCls} tracking-widest text-center`}
-                />
-              </Field>
-              {error && <p className="text-xs text-rose-600">{error}</p>}
-              <button
-                type="submit" disabled={loading || otp.length < 8}
-                className={primaryBtn}
-              >
-                {loading ? 'Verifying…' : 'Sign in'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setStep('email'); setOtp(''); setError(null); setInfo(null) }}
-                className="w-full text-xs text-neutral-500 hover:text-neutral-700"
-              >
-                ← Use a different email
-              </button>
-            </form>
-          </>
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <Field label="6–8 digit code">
+              <input
+                type="text" inputMode="numeric" required maxLength={8}
+                value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                placeholder="••••••••"
+                className={`${inputCls} tracking-[0.4em] text-center text-xl font-semibold`}
+              />
+            </Field>
+            <button
+              type="submit" disabled={loading || otp.length < 6}
+              className={primaryBtn}
+            >
+              {loading ? <Loader2 size={16} className="animate-spin" /> : 'Sign in'}
+            </button>
+          </form>
         )}
 
-        {/* ── Sign up: enter email ── */}
+        {/* ── Signup: enter email ── */}
         {step === 'signup' && (
-          <>
-            <h1 className="text-lg font-semibold text-neutral-900">Create account</h1>
-            <p className="mt-1 text-sm text-neutral-500">
-              Enter your email and we&apos;ll send you a one-time code to get started.
-            </p>
-            <form onSubmit={handleSignupSendOtp} className="mt-5 space-y-4">
-              <Field label="Email address">
-                <input
-                  type="email" required autoComplete="email"
-                  value={signupEmail} onChange={e => setSignupEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className={inputCls}
-                />
-              </Field>
-              {error && <p className="text-xs text-rose-600">{error}</p>}
-              <button type="submit" disabled={loading || !signupEmail} className={primaryBtn}>
-                {loading ? <Loader2 size={14} className="animate-spin inline mr-1" /> : null}
-                {loading ? 'Sending…' : 'Send code'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setStep('email'); setError(null) }}
-                className="w-full text-xs text-neutral-500 hover:text-neutral-700"
-              >
-                ← Back to sign in
-              </button>
-            </form>
-          </>
+          <form onSubmit={handleSignupSendOtp} className="space-y-4">
+            <Field label="Your email address">
+              <input
+                type="email" required autoComplete="email"
+                value={signupEmail} onChange={e => setSignupEmail(e.target.value)}
+                placeholder="you@example.com"
+                className={inputCls}
+              />
+            </Field>
+            <button type="submit" disabled={loading || !signupEmail} className={primaryBtn}>
+              {loading ? <Loader2 size={16} className="animate-spin" /> : 'Send verification code'}
+            </button>
+          </form>
         )}
 
-        {/* ── Sign up: verify OTP ── */}
+        {/* ── Signup: verify OTP ── */}
         {step === 'signup-otp' && (
-          <>
-            <h1 className="text-lg font-semibold text-neutral-900">Verify your email</h1>
-            <p className="mt-1 text-sm text-neutral-500">
-              {info ?? `Enter the code we sent to ${signupEmail}.`}
-            </p>
-            <form onSubmit={handleSignupVerifyOtp} className="mt-5 space-y-4">
-              <Field label="One-time code">
-                <input
-                  type="text" inputMode="numeric" required maxLength={8}
-                  value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-                  placeholder="12345678"
-                  className={`${inputCls} tracking-widest text-center`}
-                />
-              </Field>
-              {error && <p className="text-xs text-rose-600">{error}</p>}
-              <button
-                type="submit" disabled={loading || otp.length < 8}
-                className={primaryBtn}
-              >
-                {loading ? 'Verifying…' : 'Verify & continue'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setStep('signup'); setOtp(''); setError(null); setInfo(null) }}
-                className="w-full text-xs text-neutral-500 hover:text-neutral-700"
-              >
-                ← Use a different email
-              </button>
-            </form>
-          </>
+          <form onSubmit={handleSignupVerifyOtp} className="space-y-4">
+            <Field label="6–8 digit code">
+              <input
+                type="text" inputMode="numeric" required maxLength={8}
+                value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                placeholder="••••••••"
+                className={`${inputCls} tracking-[0.4em] text-center text-xl font-semibold`}
+              />
+            </Field>
+            <button
+              type="submit" disabled={loading || otp.length < 6}
+              className={primaryBtn}
+            >
+              {loading ? <Loader2 size={16} className="animate-spin" /> : 'Verify & continue'}
+            </button>
+          </form>
         )}
+
       </div>
 
-      <p className="mt-6 text-[11px] text-neutral-400">By signing in you agree to our terms.</p>
+      <p className="py-4 text-center text-[11px] text-slate-400 bg-white">
+        By continuing you agree to our terms of service.
+      </p>
     </main>
   )
 }
 
-/* ── tiny presentational helpers ── */
+/* ── Shared style tokens ── */
 const inputCls =
-  'w-full rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-100'
+  'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-violet-500 focus:bg-white focus:ring-2 focus:ring-violet-100'
+
 const primaryBtn =
-  'w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99] hover:bg-indigo-700 disabled:opacity-50'
+  'w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700 active:scale-[0.99] disabled:opacity-50'
+
 const secondaryBtn =
-  'w-full inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50'
+  'w-full inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-neutral-600">{label}</span>
+    <label className="block space-y-1.5">
+      <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </span>
       {children}
     </label>
   )
