@@ -3,7 +3,7 @@
  */
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Mail, Phone, Home as HomeIcon, BadgeCheck, ShieldCheck } from 'lucide-react'
+import { Mail, Phone, Home as HomeIcon, BadgeCheck, ShieldCheck, UserCog } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
 import LogoutButton from './LogoutButton'
 import DeleteAccountButton from './DeleteAccountButton'
@@ -58,10 +58,30 @@ export default async function ProfilePage() {
             </div>
           </div>
           <DetailRow icon={Mail}     label="Email" value={user.email ?? '—'} />
-          <DetailRow icon={Phone}    label="Phone" value={profile?.phone ?? 'Not added'} />
-          <DetailRow icon={HomeIcon} label="Flat"  value={profile?.flat_number ?? 'Not added'} last />
+          <DetailRow icon={Phone}    label="Phone" value={profile?.phone ?? 'Not added'} last={isWorker} />
+          
+          {/* Only show Flat Number to Residents */}
+          {!isWorker && (
+            <DetailRow icon={HomeIcon} label="Flat" value={profile?.flat_number ?? 'Not added'} last />
+          )}
         </div>
       </section>
+
+      {/* Show Worker Profile Link ONLY to Workers */}
+      {isWorker && (
+        <section className="px-5 mt-4">
+          <Link href="/worker-profile"
+            className="flex items-center gap-3 bg-violet-50 border border-violet-100 rounded-3xl px-5 py-4 shadow-sm active:bg-violet-100 transition min-h-[64px]">
+            <div className="h-9 w-9 rounded-2xl bg-white flex items-center justify-center shrink-0 shadow-sm">
+              <UserCog size={16} className="text-violet-600" />
+            </div>
+            <div>
+              <p className="font-bold text-violet-900 text-[14px]">Edit Worker Profile</p>
+              <p className="text-xs text-violet-600">Update your bio, rate, and specialties</p>
+            </div>
+          </Link>
+        </section>
+      )}
 
       {/* Worker availability toggle */}
       {isWorker && workerRow && (

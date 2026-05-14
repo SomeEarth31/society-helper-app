@@ -112,7 +112,7 @@ export default function OnboardingForm({
       // 2. ONLY THEN, if the user is a worker, insert into the workers table
       if (role === 'worker') {
         const rate = parseFloat(dailyRate || '0') || null
-        const { error: wErr } = await supabase.from('workers').upsert(
+        const { error: wErr } = await supabase.from('workers').insert(
           {
             auth_id: user.id, 
             phone: safePhone, // <-- Using safePhone instead of falling back to email
@@ -131,17 +131,22 @@ export default function OnboardingForm({
       const { error: pwErr } = await supabase.auth.updateUser({ password })
       if (pwErr) throw new Error(`Password Error: ${pwErr.message}`)
 
-      // 4. Success handling
-      router.replace('/')
+      // 4. Success handling (THE FIX IS HERE)
+      if (role === 'worker') {
+        // Send workers to finish the second half of their profile
+        router.replace('/worker-profile') 
+      } else {
+        // Send residents to the dashboard
+        router.replace('/')
+      }
+      
       router.refresh()
 
     } catch (err: any) {
-      // Catches profile, worker, and password errors into one clean UI message
       setError(err.message || "An unexpected error occurred during onboarding.")
     } finally {
       setLoading(false)
     }
-  }
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col">
