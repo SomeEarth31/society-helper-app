@@ -377,18 +377,35 @@ create policy "profiles_conversation_read" on profiles
   );
 
 -- ── workers ──
+-- A worker must always be able to read their own row (used by the
+-- worker dashboard AND by the RETURNING clause of the onboarding upsert).
+-- Without this, a worker created with society_id = NULL is invisible to
+-- themselves until they pick a society.
+create policy "workers_self_select" on workers
+  for select to authenticated
+  using (auth_id = auth.uid());
+
+-- Society members can read each other's worker rows.
 create policy "workers_society_read" on workers
-  for select using (
-    society_id = public.my_society_id()
-  );
+  for select to authenticated
+  using (society_id is not null and society_id = public.my_society_id());
+
 -- Workers can insert their own row during onboarding.
 create policy "workers_self_insert" on workers
-  for insert with check (auth_id = auth.uid());
+  for insert to authenticated
+  with check (auth_id = auth.uid());
+
+-- Workers can update their own row.
 create policy "workers_self_update" on workers
-  for update using (auth_id = auth.uid());
+  for update to authenticated
+  using      (auth_id = auth.uid())
+  with check (auth_id = auth.uid());
+
 -- Admin override via SECURITY DEFINER helper (avoids profiles↔workers recursion).
 create policy "workers_admin_all" on workers
-  for all using (public.is_admin());
+  for all to authenticated
+  using      (public.is_admin())
+  with check (public.is_admin());
 
 -- ── engagements ──
 create policy "engagements_employer_all" on engagements

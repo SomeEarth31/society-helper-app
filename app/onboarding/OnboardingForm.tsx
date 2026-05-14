@@ -44,41 +44,103 @@ export default function OnboardingForm({
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState<string | null>(null)
 
+  // async function handleSubmit(e: React.FormEvent) {
+  //   e.preventDefault()
+  //   if (!role)             { setError('Please choose Resident or Helper.'); return }
+  //   if (password.length < 6) { setError('Password must be at least 6 characters.'); return }
+  //   setError(null); setLoading(true)
+
+  //   const { data: { user } } = await supabase.auth.getUser()
+  //   if (!user) { setLoading(false); router.replace('/login'); return }
+
+  //   const { error: profileErr } = await supabase.from('profiles').update({
+  //     full_name: fullName, phone: phone || null,
+  //     flat_number: role === 'resident' ? flat || null : null,
+  //     society_id: societyId, role,
+  //   }).eq('id', user.id)
+  //   if (profileErr) { setError(profileErr.message); setLoading(false); return }
+
+  //   if (role === 'worker') {
+  //     const rate = parseFloat(dailyRate || '0') || null
+  //     const { error: wErr } = await supabase.from('workers').upsert(
+  //       {
+  //         auth_id: user.id, phone: phone || user.email || user.id,
+  //         full_name: fullName, specialty, daily_rate: rate,
+  //         society_id: societyId, is_active: true,
+  //       },
+  //       { onConflict: 'auth_id' },
+  //     )
+  //     if (wErr) { setError(wErr.message); setLoading(false); return }
+  //   }
+
+  //   const { error: pwErr } = await supabase.auth.updateUser({ password })
+  //   if (pwErr) { setError(pwErr.message); setLoading(false); return }
+
+  //   setLoading(false)
+  //   router.replace('/')
+  //   router.refresh()
+  // }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!role)             { setError('Please choose Resident or Helper.'); return }
+    if (!role) { setError('Please choose Resident or Helper.'); return }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return }
     setError(null); setLoading(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setLoading(false); router.replace('/login'); return }
+    try {
+      // 0. Get User
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { 
+        router.replace('/login'); 
+        return; 
+      }
 
-    const { error: profileErr } = await supabase.from('profiles').update({
-      full_name: fullName, phone: phone || null,
-      flat_number: role === 'resident' ? flat || null : null,
-      society_id: societyId, role,
-    }).eq('id', user.id)
-    if (profileErr) { setError(profileErr.message); setLoading(false); return }
+      // Sanitize variables to prevent DB constraint errors
+      const safePhone = phone.trim() || null;
 
-    if (role === 'worker') {
-      const rate = parseFloat(dailyRate || '0') || null
-      const { error: wErr } = await supabase.from('workers').upsert(
-        {
-          auth_id: user.id, phone: phone || user.email || user.id,
-          full_name: fullName, specialty, daily_rate: rate,
-          society_id: societyId, is_active: true,
-        },
-        { onConflict: 'auth_id' },
-      )
-      if (wErr) { setError(wErr.message); setLoading(false); return }
+      // 1. ALWAYS update the profiles table FIRST to satisfy Foreign Keys
+      const { error: profileErr } = await supabase.from('profiles').update({
+        full_name: fullName.trim(), 
+        phone: safePhone,
+        flat_number: role === 'resident' ? (flat.trim() || null) : null,
+        society_id: societyId, 
+        role,
+      }).eq('id', user.id)
+
+      if (profileErr) throw new Error(`Profile Error: ${profileErr.message}`)
+
+      // 2. ONLY THEN, if the user is a worker, insert into the workers table
+      if (role === 'worker') {
+        const rate = parseFloat(dailyRate || '0') || null
+        const { error: wErr } = await supabase.from('workers').upsert(
+          {
+            auth_id: user.id, 
+            phone: safePhone, // <-- Using safePhone instead of falling back to email
+            full_name: fullName.trim(), 
+            specialty, 
+            daily_rate: rate,
+            society_id: societyId, 
+            is_active: true,
+          },
+          { onConflict: 'auth_id' },
+        )
+        if (wErr) throw new Error(`Worker Setup Error: ${wErr.message}`)
+      }
+
+      // 3. Update the user password
+      const { error: pwErr } = await supabase.auth.updateUser({ password })
+      if (pwErr) throw new Error(`Password Error: ${pwErr.message}`)
+
+      // 4. Success handling
+      router.replace('/')
+      router.refresh()
+
+    } catch (err: any) {
+      // Catches profile, worker, and password errors into one clean UI message
+      setError(err.message || "An unexpected error occurred during onboarding.")
+    } finally {
+      setLoading(false)
     }
-
-    const { error: pwErr } = await supabase.auth.updateUser({ password })
-    if (pwErr) { setError(pwErr.message); setLoading(false); return }
-
-    setLoading(false)
-    router.replace('/')
-    router.refresh()
   }
 
   return (
