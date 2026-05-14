@@ -1,44 +1,47 @@
 -- ============================================================
--- SOCIETY HELPER — DEMO DATA SEED  (v2: workers + job postings)
+-- SOCIETY HELPER — DEMO DATA SEED  (v3: two worker test accounts)
 -- ============================================================
--- Populates your account with realistic test data so you can
--- exercise the full app: resident dashboard, directory, engagement
--- detail, attendance calendar, payments history, AND the new
--- worker dashboard with available openings.
+-- Populates your account with realistic test data.
 --
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  HOW TO RUN                                              ║
--- ║  1. Open Supabase Dashboard → SQL Editor → New query     ║
--- ║  2. Paste this whole file                                ║
--- ║  3. (Optional) change v_user_email below if needed       ║
--- ║  4. Click "Run"                                          ║
+-- ║  1. Supabase Dashboard → SQL Editor → New query          ║
+-- ║  2. Paste this whole file and click "Run"                ║
 -- ║                                                          ║
 -- ║  HOW TO REMOVE                                           ║
--- ║  Run cleanup_demo_data.sql — it deletes everything       ║
--- ║  tagged [DEMO] in the right FK order.                    ║
+-- ║  Run cleanup_demo_data.sql                               ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- TEST WORKER LOGIN (created by this seed):
---   email:    worker@test.com
---   password: password123
---   role:     worker (linked to "[DEMO] Lakshmi Devi")
+-- TEST ACCOUNTS (created by this seed):
+--   Resident (your account): samarth.2kumar@gmail.com
+--   Worker 1 (demo):         worker@test.com       / password123
+--   Worker 2 (your iitk):   samarthk21@iitk.ac.in / password123
 --
--- Idempotent: re-running upserts existing rows by fixed UUID.
+-- Worker 2 (samarthk21@iitk.ac.in) is:
+--   • Specialty: cook
+--   • Hired by samarth.2kumar@gmail.com
+--   • Has attendance for current month (mostly present)
+--   • Has a completed payment this month → earnings show up on worker dashboard
+--
+-- Idempotent: re-running upserts by fixed UUIDs.
 -- ============================================================
 
 DO $$
 DECLARE
-  -- The "resident" account — your real signed-up email.
   v_user_email   text := 'samarth.2kumar@gmail.com';
   v_user_id      uuid;
   v_society_id   uuid;
   v_month_start  date := date_trunc('month', now())::date;
 
-  -- Test worker auth user (created below).
-  v_worker_auth_id  uuid := '33333333-3333-3333-3333-000000000001';
-  v_worker_email    text := 'worker@test.com';
+  -- Worker 1: worker@test.com (linked to Lakshmi Devi)
+  v_worker1_auth_id uuid := '33333333-3333-3333-3333-000000000001';
+  v_worker1_email   text := 'worker@test.com';
 
-  -- Worker UUIDs.
+  -- Worker 2: samarthk21@iitk.ac.in (cook, hired by resident)
+  v_worker2_auth_id uuid := '33333333-3333-3333-3333-000000000002';
+  v_worker2_email   text := 'samarthk21@iitk.ac.in';
+
+  -- Worker UUIDs
   w_lakshmi  uuid := '11111111-1111-1111-1111-000000000001';
   w_ramesh   uuid := '11111111-1111-1111-1111-000000000002';
   w_priya    uuid := '11111111-1111-1111-1111-000000000003';
@@ -54,18 +57,27 @@ DECLARE
   w_kavita   uuid := '11111111-1111-1111-1111-000000000013';
   w_manoj    uuid := '11111111-1111-1111-1111-000000000014';
   w_pooja    uuid := '11111111-1111-1111-1111-000000000015';
+  -- Worker 2's directory row
+  w_samarth_iitk uuid := '11111111-1111-1111-1111-000000000020';
 
-  e_lakshmi  uuid := '22222222-2222-2222-2222-000000000001';
-  e_ramesh   uuid := '22222222-2222-2222-2222-000000000002';
+  -- Engagement UUIDs
+  e_lakshmi      uuid := '22222222-2222-2222-2222-000000000001';
+  e_ramesh       uuid := '22222222-2222-2222-2222-000000000002';
+  e_samarth_iitk uuid := '22222222-2222-2222-2222-000000000003';
 
-  p_old      uuid := '33333333-3333-3333-3333-000000000010';
-  p_recent   uuid := '33333333-3333-3333-3333-000000000011';
+  -- Payment UUIDs
+  p_old         uuid := '33333333-3333-3333-3333-000000000010';
+  p_recent      uuid := '33333333-3333-3333-3333-000000000011';
+  p_iitk_month  uuid := '33333333-3333-3333-3333-000000000013';
+  p_completed   uuid := '33333333-3333-3333-3333-000000000012';
 
-  j_maid     uuid := '44444444-4444-4444-4444-000000000001';
-  j_cook     uuid := '44444444-4444-4444-4444-000000000002';
-  j_car      uuid := '44444444-4444-4444-4444-000000000003';
-  j_garden   uuid := '44444444-4444-4444-4444-000000000004';
+  -- Job posting UUIDs
+  j_maid   uuid := '44444444-4444-4444-4444-000000000001';
+  j_cook   uuid := '44444444-4444-4444-4444-000000000002';
+  j_car    uuid := '44444444-4444-4444-4444-000000000003';
+  j_garden uuid := '44444444-4444-4444-4444-000000000004';
 BEGIN
+
   -- ──────────────────────────────────────────────────────────
   -- 1. Resolve the resident auth user.
   -- ──────────────────────────────────────────────────────────
@@ -78,10 +90,10 @@ BEGIN
   END IF;
 
   -- ──────────────────────────────────────────────────────────
-  -- 2. Profile + society for the resident.
+  -- 2. Resident profile + society
   -- ──────────────────────────────────────────────────────────
   INSERT INTO profiles (id, full_name, flat_number, phone, role)
-  VALUES (v_user_id, 'Samarth Kumar', 'A-203', '+919812345678', 'resident')
+  VALUES (v_user_id, 'Samarth Kumar', 'A-204', '+919812345678', 'resident')
   ON CONFLICT (id) DO UPDATE SET
     full_name   = COALESCE(profiles.full_name,   EXCLUDED.full_name),
     flat_number = COALESCE(profiles.flat_number, EXCLUDED.flat_number),
@@ -99,10 +111,7 @@ BEGIN
   END IF;
 
   -- ──────────────────────────────────────────────────────────
-  -- 3. Test worker auth user (worker@test.com / password123).
-  --    Inserting directly into auth.users with a bcrypt-hashed
-  --    password is supported on Supabase; the on_auth_user_created
-  --    trigger will create the matching profiles row.
+  -- 3. Worker 1 auth: worker@test.com / password123
   -- ──────────────────────────────────────────────────────────
   INSERT INTO auth.users (
     id, instance_id, aud, role, email, encrypted_password,
@@ -110,40 +119,77 @@ BEGIN
     created_at, updated_at, confirmation_token, recovery_token,
     email_change_token_new, email_change
   ) VALUES (
-    v_worker_auth_id,
+    v_worker1_auth_id,
     '00000000-0000-0000-0000-000000000000',
     'authenticated', 'authenticated',
-    v_worker_email,
+    v_worker1_email,
     crypt('password123', gen_salt('bf')),
     now(),
-    '{"provider":"email","providers":["email"]}',
-    '{}',
-    now(), now(),
-    '', '', '', ''
+    '{"provider":"email","providers":["email"]}', '{}',
+    now(), now(), '', '', '', ''
   ) ON CONFLICT (id) DO UPDATE SET
     encrypted_password = EXCLUDED.encrypted_password,
     email_confirmed_at = COALESCE(auth.users.email_confirmed_at, now()),
     updated_at         = now();
 
-  -- Ensure the profile row exists with the worker role.
   INSERT INTO profiles (id, full_name, phone, society_id, role)
-  VALUES (v_worker_auth_id, '[DEMO] Lakshmi Devi', '+919900000001', v_society_id, 'worker')
+  VALUES (v_worker1_auth_id, '[DEMO] Lakshmi Devi', '+919900000001', v_society_id, 'worker')
   ON CONFLICT (id) DO UPDATE SET
     full_name  = EXCLUDED.full_name,
     society_id = EXCLUDED.society_id,
     role       = EXCLUDED.role;
 
   -- ──────────────────────────────────────────────────────────
-  -- 4. Workers directory — 15 diverse helpers.
-  --    Lakshmi is linked to the test worker auth user.
+  -- 4. Worker 2 auth: samarthk21@iitk.ac.in / password123
+  --    If the email already exists (real account), reuse that UUID.
+  --    Only INSERT if the email is truly new.
+  -- ──────────────────────────────────────────────────────────
+  SELECT id INTO v_worker2_auth_id FROM auth.users WHERE email = v_worker2_email LIMIT 1;
+
+  IF v_worker2_auth_id IS NULL THEN
+    -- Brand-new email: insert with fixed UUID
+    v_worker2_auth_id := '33333333-3333-3333-3333-000000000002';
+    INSERT INTO auth.users (
+      id, instance_id, aud, role, email, encrypted_password,
+      email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+      created_at, updated_at, confirmation_token, recovery_token,
+      email_change_token_new, email_change
+    ) VALUES (
+      v_worker2_auth_id,
+      '00000000-0000-0000-0000-000000000000',
+      'authenticated', 'authenticated',
+      v_worker2_email,
+      crypt('password123', gen_salt('bf')),
+      now(),
+      '{"provider":"email","providers":["email"]}', '{}',
+      now(), now(), '', '', '', ''
+    );
+  ELSE
+    -- Email already exists — just update password to known value for testing
+    UPDATE auth.users SET
+      encrypted_password = crypt('password123', gen_salt('bf')),
+      email_confirmed_at = COALESCE(email_confirmed_at, now()),
+      updated_at         = now()
+    WHERE id = v_worker2_auth_id;
+  END IF;
+
+  INSERT INTO profiles (id, full_name, phone, society_id, role)
+  VALUES (v_worker2_auth_id, 'Samarth K (Cook)', '+919900000020', v_society_id, 'worker')
+  ON CONFLICT (id) DO UPDATE SET
+    full_name  = EXCLUDED.full_name,
+    society_id = EXCLUDED.society_id,
+    role       = EXCLUDED.role;
+
+  -- ──────────────────────────────────────────────────────────
+  -- 5. Workers directory — 15 demo + Worker 2 row
   -- ──────────────────────────────────────────────────────────
   INSERT INTO workers
     (id, society_id, auth_id, full_name, phone, specialty,
      bio, experience_years, monthly_rate, daily_rate, trust_score, photo_url, upi_id)
   VALUES
-    (w_lakshmi, v_society_id, v_worker_auth_id,
+    (w_lakshmi, v_society_id, v_worker1_auth_id,
        '[DEMO] Lakshmi Devi',  '+919900000001', 'maid',
-       'Honest and punctual. 10+ years cleaning homes.', 12, 7000,  300, 4.8,
+       'Honest and punctual. 10+ years cleaning homes.', 12, 7000, 300, 4.8,
        'https://i.pravatar.cc/300?img=47', 'lakshmi@okhdfc'),
 
     (w_ramesh, v_society_id, null,
@@ -214,7 +260,14 @@ BEGIN
     (w_pooja, v_society_id, null,
        '[DEMO] Pooja Mishra',  '+919900000015', 'cleaner',
        'Deep cleaning — kitchen, bathrooms, sofas.', 5, 9000, 380, 4.6,
-       'https://i.pravatar.cc/300?img=25', 'pooja@okaxis')
+       'https://i.pravatar.cc/300?img=25', 'pooja@okaxis'),
+
+    -- Worker 2: samarthk21@iitk.ac.in → cook, hired by the resident
+    (w_samarth_iitk, v_society_id, v_worker2_auth_id,
+       'Samarth K (Cook)',      '+919900000020', 'cook',
+       'North Indian veg & non-veg. IIT trained — yes really.', 2, 14000, 580, 4.7,
+       'https://i.pravatar.cc/300?img=57', 'samarthk@okhdfc')
+
   ON CONFLICT (id) DO UPDATE SET
     society_id       = EXCLUDED.society_id,
     auth_id          = EXCLUDED.auth_id,
@@ -230,11 +283,14 @@ BEGIN
     upi_id           = EXCLUDED.upi_id;
 
   -- ──────────────────────────────────────────────────────────
-  -- 5. Active engagements (Lakshmi & Ramesh hired by resident).
+  -- 6. Active engagements
+  --    Lakshmi + iitk cook are hired by the resident.
+  --    Ramesh is also hired (for variety on dashboard).
   -- ──────────────────────────────────────────────────────────
   INSERT INTO engagements (id, employer_id, worker_id, monthly_salary, service_type, status) VALUES
-    (e_lakshmi, v_user_id, w_lakshmi, 8000,  'maid', 'active'),
-    (e_ramesh,  v_user_id, w_ramesh,  12000, 'cook', 'active')
+    (e_lakshmi,      v_user_id, w_lakshmi,      8000,  'maid', 'active'),
+    (e_ramesh,       v_user_id, w_ramesh,        12000, 'cook', 'active'),
+    (e_samarth_iitk, v_user_id, w_samarth_iitk, 14000, 'cook', 'active')
   ON CONFLICT (id) DO UPDATE SET
     employer_id    = EXCLUDED.employer_id,
     worker_id      = EXCLUDED.worker_id,
@@ -243,50 +299,65 @@ BEGIN
     status         = EXCLUDED.status;
 
   -- ──────────────────────────────────────────────────────────
-  -- 6. Attendance for the current month (deterministic).
+  -- 7. Attendance (current month)
   -- ──────────────────────────────────────────────────────────
   DELETE FROM attendance
-   WHERE engagement_id IN (e_lakshmi, e_ramesh)
+   WHERE engagement_id IN (e_lakshmi, e_ramesh, e_samarth_iitk)
      AND date >= v_month_start
      AND date <  (v_month_start + interval '1 month');
 
+  -- Lakshmi: 12 days (day 8 = half day)
   INSERT INTO attendance (engagement_id, date, status)
   SELECT e_lakshmi, v_month_start + (d - 1),
          (CASE WHEN d = 8 THEN 'half_day' ELSE 'present' END)::attendance_status
     FROM generate_series(1, 12) AS d;
 
+  -- Ramesh: 10 days (day 5 = absent)
   INSERT INTO attendance (engagement_id, date, status)
   SELECT e_ramesh, v_month_start + (d - 1),
          (CASE WHEN d = 5 THEN 'absent' ELSE 'present' END)::attendance_status
     FROM generate_series(1, 10) AS d;
 
+  -- Samarth iitk (cook): 9 days, all present
+  INSERT INTO attendance (engagement_id, date, status)
+  SELECT e_samarth_iitk, v_month_start + (d - 1), 'present'::attendance_status
+    FROM generate_series(1, 9) AS d;
+
   -- ──────────────────────────────────────────────────────────
-  -- 7. Payment history (one completed last month, one initiated this month,
-  --    plus one completed this month so the worker dashboard's "Earned"
-  --    card has a positive number).
+  -- 8. Payments
   -- ──────────────────────────────────────────────────────────
   INSERT INTO payments
     (id, engagement_id, amount, period_start, period_end,
      days_worked, nodal_vpa, upi_txn_ref, utr, status, created_at)
   VALUES
-    (p_old,    e_lakshmi, 7500,
+    -- Last month completed payment (Lakshmi)
+    (p_old, e_lakshmi, 7500,
        (v_month_start - interval '1 month')::date,
        (v_month_start - interval '1 day')::date,
        26, 'samarth@upi', 'SHDEMO0001AAAA', 'SHDEMO0001AAAA', 'completed',
        (v_month_start - interval '2 days')::timestamptz),
 
+    -- This month initiated (Ramesh)
     (p_recent, e_ramesh, 4000,
        v_month_start,
-       (v_month_start + interval '1 month' - interval '1 day')::date,
+       (v_month_start + interval '1 month - 1 day')::date,
        10, 'samarth@upi', 'SHDEMO0002BBBB', null, 'initiated',
        now()),
 
-    ('33333333-3333-3333-3333-000000000012',
-       e_lakshmi, 3500,
+    -- This month completed (Lakshmi) — so worker 1 shows earnings
+    (p_completed, e_lakshmi, 3500,
        v_month_start,
-       (v_month_start + interval '1 month' - interval '1 day')::date,
+       (v_month_start + interval '1 month - 1 day')::date,
        11.5, 'samarth@upi', 'SHDEMO0003CCCC', 'SHDEMO0003CCCC', 'completed',
+       now()),
+
+    -- This month completed (iitk cook) — so worker 2 shows earnings
+    (p_iitk_month, e_samarth_iitk, 4846,
+       v_month_start,
+       (v_month_start + interval '1 month - 1 day')::date,
+       9, 'samarth@upi', 'SHDEMO0004DDDD', 'SHDEMO0004DDDD', 'completed',
        now())
+
   ON CONFLICT (id) DO UPDATE SET
     engagement_id = EXCLUDED.engagement_id,
     amount        = EXCLUDED.amount,
@@ -300,23 +371,23 @@ BEGIN
     created_at    = EXCLUDED.created_at;
 
   -- ──────────────────────────────────────────────────────────
-  -- 8. Job postings — open openings the worker dashboard surfaces.
+  -- 9. Job postings
   -- ──────────────────────────────────────────────────────────
   INSERT INTO job_postings
     (id, society_id, employer_id, specialty, description, offered_salary, status)
   VALUES
     (j_maid,   v_society_id, v_user_id, 'maid',
       '[DEMO] Need a maid for sweeping, mopping & dishes. Mornings, 1.5 hrs.',
-      8000,  'open'),
+      8000, 'open'),
     (j_cook,   v_society_id, v_user_id, 'cook',
       '[DEMO] Part-time cook for veg dinner, 6 days/week.',
       14000, 'open'),
     (j_car,    v_society_id, v_user_id, 'car_washer',
       '[DEMO] Daily car wash (1 sedan), Monday–Saturday.',
-      3500,  'open'),
+      3500, 'open'),
     (j_garden, v_society_id, v_user_id, 'gardener',
       '[DEMO] Weekly maintenance for balcony plants & a small terrace lawn.',
-      5000,  'open')
+      5000, 'open')
   ON CONFLICT (id) DO UPDATE SET
     society_id     = EXCLUDED.society_id,
     employer_id    = EXCLUDED.employer_id,
@@ -328,6 +399,7 @@ BEGIN
   -- ──────────────────────────────────────────────────────────
   RAISE NOTICE 'Seed complete.';
   RAISE NOTICE '  Resident: % (society=%)', v_user_email, v_society_id;
-  RAISE NOTICE '  Test worker login: % / password123', v_worker_email;
-  RAISE NOTICE '  Workers: 15, Engagements: 2 active, Job postings: 4 open';
+  RAISE NOTICE '  Worker 1: % / password123  (Lakshmi Devi, maid)', v_worker1_email;
+  RAISE NOTICE '  Worker 2: % / password123  (Samarth K, cook, hired by resident)', v_worker2_email;
+  RAISE NOTICE '  Workers directory: 16 rows  |  Engagements: 3 active  |  Job postings: 4 open';
 END $$;

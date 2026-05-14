@@ -1,11 +1,11 @@
 'use client'
 /**
- * WorkerList — interactive filter + search island for /directory.
- * Modern Urban Company style cards.
+ * WorkerList — resident's worker directory with search + filter.
+ * Modern UC-grade cards.
  */
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Search, Star, IndianRupee, UserPlus } from 'lucide-react'
+import { Search, Star, IndianRupee, UserPlus, SlidersHorizontal } from 'lucide-react'
 import type { WorkerRow } from './page'
 
 const SPECIALTIES = [
@@ -16,20 +16,18 @@ const SPECIALTIES = [
   { key: 'car_washer',label: 'Car Wash' },
   { key: 'gardener',  label: 'Gardener' },
   { key: 'caretaker', label: 'Caretaker' },
-  { key: 'driver',    label: 'Driver' },
 ] as const
 
 type Filter = typeof SPECIALTIES[number]['key']
 
 export default function WorkerList({ workers }: { workers: WorkerRow[] }) {
-  const [q, setQ] = useState('')
+  const [q, setQ]         = useState('')
   const [filter, setFilter] = useState<Filter>('all')
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return workers.filter(w => {
-      const matchesSpecialty = filter === 'all' || (w.specialty ?? '').toLowerCase() === filter
-      if (!matchesSpecialty) return false
+      if (filter !== 'all' && (w.specialty ?? '').toLowerCase() !== filter) return false
       if (!needle) return true
       return (
         w.full_name.toLowerCase().includes(needle) ||
@@ -43,12 +41,12 @@ export default function WorkerList({ workers }: { workers: WorkerRow[] }) {
 
       {/* Search */}
       <div className="relative">
-        <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+        <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
         <input
           value={q}
           onChange={e => setQ(e.target.value)}
-          placeholder="Search by name or specialty…"
-          className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-100"
+          placeholder="Search helpers…"
+          className="w-full rounded-2xl border-2 border-slate-100 bg-white py-3.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-300 shadow-sm focus:border-violet-500 focus:outline-none"
         />
       </div>
 
@@ -60,10 +58,10 @@ export default function WorkerList({ workers }: { workers: WorkerRow[] }) {
             <button
               key={s.key}
               onClick={() => setFilter(s.key)}
-              className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${
+              className={`shrink-0 rounded-2xl border-2 px-3.5 py-1.5 text-xs font-bold transition ${
                 active
                   ? 'bg-violet-600 border-violet-600 text-white shadow-sm'
-                  : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                  : 'bg-white border-slate-100 text-slate-500 hover:border-slate-200'
               }`}
             >
               {s.label}
@@ -72,46 +70,51 @@ export default function WorkerList({ workers }: { workers: WorkerRow[] }) {
         })}
       </div>
 
+      {/* Count */}
+      <p className="text-xs font-bold text-slate-400">
+        {filtered.length} {filtered.length === 1 ? 'helper' : 'helpers'} found
+      </p>
+
       {/* Results */}
       {filtered.length === 0 ? (
         <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-white p-10 text-center">
-          <Search size={24} className="text-slate-300 mx-auto mb-3" />
-          <p className="text-sm font-medium text-slate-500">No helpers found</p>
-          <p className="text-xs text-slate-400 mt-1">Try a different name or category</p>
+          <SlidersHorizontal size={24} className="text-slate-300 mx-auto mb-3" />
+          <p className="font-black text-slate-500">No helpers match</p>
+          <p className="text-xs text-slate-400 mt-1">Try a different search or filter</p>
         </div>
       ) : (
         <ul className="space-y-3">
           {filtered.map(w => (
             <li key={w.id} className="rounded-3xl bg-white border border-slate-100 shadow-sm p-4">
               <div className="flex items-center gap-3.5">
-                <Avatar name={w.full_name} url={w.photo_url} />
+                <WorkerAvatar name={w.full_name} url={w.photo_url} />
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-900 truncate">{w.full_name}</p>
-                  <p className="text-xs text-slate-500 capitalize mt-0.5">
-                    {(w.specialty ?? '').replace('_', ' ')}
+                  <p className="font-bold text-slate-900 text-[15px] truncate">{w.full_name}</p>
+                  <p className="text-xs text-slate-400 capitalize mt-0.5">
+                    {(w.specialty ?? '').replace(/_/g, ' ')}
                   </p>
-                  <div className="mt-1.5 flex items-center gap-3 text-xs">
-                    <span className="flex items-center gap-1">
-                      <Star size={12} className="text-amber-400 fill-amber-400" />
-                      <span className="font-semibold text-slate-700">
+                  <div className="mt-1.5 flex items-center gap-3">
+                    <span className="flex items-center gap-1 text-xs">
+                      <Star size={11} className="text-amber-400 fill-amber-400" />
+                      <span className="font-black text-slate-700">
                         {w.trust_score?.toFixed(1) ?? '—'}
                       </span>
                     </span>
                     {w.daily_rate != null && (
-                      <span className="flex items-center gap-0.5 text-slate-600">
+                      <span className="flex items-center gap-0.5 text-xs text-slate-500">
                         <IndianRupee size={11} />
-                        <span className="font-semibold">{w.daily_rate.toLocaleString('en-IN')}</span>
-                        <span className="text-slate-400">/day</span>
+                        <span className="font-bold">{w.daily_rate.toLocaleString('en-IN')}</span>
+                        <span className="text-slate-300">/day</span>
                       </span>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="mt-3.5 pt-3.5 border-t border-slate-100 flex justify-end">
+              <div className="mt-4 pt-3.5 border-t border-slate-100 flex justify-end">
                 <Link
                   href={`/engagement/new?worker_id=${w.id}`}
-                  className="inline-flex items-center gap-1.5 rounded-2xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm active:scale-[0.98] transition"
+                  className="inline-flex items-center gap-1.5 rounded-2xl bg-violet-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-violet-200 active:scale-[0.97] transition"
                 >
                   <UserPlus size={13} />
                   Hire
@@ -125,13 +128,11 @@ export default function WorkerList({ workers }: { workers: WorkerRow[] }) {
   )
 }
 
-function Avatar({ name, url }: { name: string; url: string | null }) {
-  if (url) {
-    return <img src={url} alt={name} className="h-12 w-12 rounded-2xl object-cover" />
-  }
+function WorkerAvatar({ name, url }: { name: string; url: string | null }) {
+  if (url) return <img src={url} alt={name} className="h-14 w-14 rounded-2xl object-cover shrink-0" />
   const initials = name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase()
   return (
-    <div className="h-12 w-12 rounded-2xl bg-violet-100 text-violet-700 flex items-center justify-center text-sm font-bold shrink-0">
+    <div className="h-14 w-14 rounded-2xl bg-violet-100 text-violet-700 flex items-center justify-center text-base font-black shrink-0">
       {initials}
     </div>
   )

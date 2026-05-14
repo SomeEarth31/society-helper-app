@@ -1,13 +1,6 @@
 /**
- * ============================================================
- * PAYMENTS — History & this-month total
+ * PAYMENTS — Settlement history
  * Route: /payments
- *
- * Lists every `payments` row visible to the resident (RLS does
- * the scoping), grouped chronologically with worker name and
- * UPI status. The header card surfaces the month-to-date total
- * so the user can sanity-check at a glance.
- * ============================================================
  */
 import { redirect } from 'next/navigation'
 import { IndianRupee, Calendar, CheckCircle2, Clock, XCircle, Wallet } from 'lucide-react'
@@ -22,7 +15,6 @@ type PaymentRow = {
   upi_txn_ref: string | null
   utr: string | null
   created_at: string
-  // Optional period fields (used by the dashboard's Settle flow).
   period_start: string | null
   period_end: string | null
   engagement: {
@@ -37,21 +29,16 @@ export default async function PaymentsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Join through `engagements` → `workers` so we can show who the payment was for.
   const { data: payments } = await supabase
     .from('payments')
     .select(`
       id, amount, status, upi_txn_ref, utr, created_at,
       period_start, period_end,
-      engagement:engagements (
-        id,
-        worker:workers ( full_name, specialty )
-      )
+      engagement:engagements ( id, worker:workers ( full_name, specialty ) )
     `)
     .order('created_at', { ascending: false })
     .returns<PaymentRow[]>()
 
-  // Month total — completed payments dated within the current calendar month.
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const monthLabel = monthStart.toLocaleString('en-IN', { month: 'long', year: 'numeric' })
@@ -61,61 +48,83 @@ export default async function PaymentsPage() {
     .reduce((sum, p) => sum + (p.amount ?? 0), 0)
 
   return (
-    <main className="min-h-screen bg-neutral-50 pb-24">
-      {/* Header */}
-      <header className="bg-white border-b border-neutral-200 px-5 pt-6 pb-4">
-        <h1 className="text-2xl font-semibold text-neutral-900">Payments</h1>
-        <p className="text-xs text-neutral-500 mt-0.5">Settlement history</p>
+    <main className="min-h-screen bg-slate-50 pb-24">
+
+      {/* ── Header ── */}
+      <header className="bg-white px-5 pt-14 pb-5 border-b border-slate-100">
+        <p className="text-xs font-bold uppercase tracking-widest text-violet-500 mb-1">
+          {monthLabel}
+        </p>
+        <h1 className="text-2xl font-black text-slate-900">Payments</h1>
+        <p className="text-xs text-slate-400 mt-0.5">Settlement history</p>
       </header>
 
-      {/* Month total card */}
-      <section className="px-5 -mt-3">
-        <div className="rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-5 text-white shadow-sm">
-          <p className="text-xs/5 uppercase tracking-wider opacity-80">{monthLabel}</p>
-          <div className="mt-3 flex items-end justify-between">
-            <div>
-              <p className="text-xs opacity-80">Paid this month</p>
-              <p className="text-3xl font-bold flex items-center">
-                <IndianRupee size={22} className="mr-0.5" />
-                {monthTotal.toLocaleString('en-IN')}
-              </p>
-            </div>
-            <div className="text-right text-xs/5 opacity-90">
-              <Wallet size={20} className="ml-auto" />
-              <p className="mt-1">{payments?.length ?? 0} total</p>
+      {/* ── Month total card ── */}
+      <section className="px-5 mt-5">
+        <div className="rounded-3xl bg-gradient-to-br from-violet-700 to-violet-500 p-5 shadow-xl shadow-violet-200">
+          <p className="text-violet-200 text-[11px] font-bold uppercase tracking-widest">
+            Paid this month
+          </p>
+          <p className="text-4xl font-black text-white mt-2 flex items-center gap-1">
+            <IndianRupee size={26} strokeWidth={2.5} />
+            {monthTotal.toLocaleString('en-IN')}
+          </p>
+          <div className="mt-4 pt-4 border-t border-white/20 flex items-center gap-5">
+            <div className="flex items-center gap-1.5">
+              <Wallet size={12} className="text-violet-200" />
+              <span className="text-white font-black text-sm">{payments?.length ?? 0}</span>
+              <span className="text-violet-200 text-xs">transactions</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* History list */}
-      <section className="px-5 mt-6">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-700">History</h2>
+      {/* ── History ── */}
+      <section className="px-5 mt-7">
+        <h2 className="text-lg font-black text-slate-900 mb-4">History</h2>
 
         {(!payments || payments.length === 0) ? (
-          <EmptyState />
+          <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-white p-10 text-center">
+            <Wallet size={28} className="text-slate-300 mx-auto mb-3" />
+            <p className="font-black text-slate-500">No payments yet</p>
+            <p className="text-xs text-slate-400 mt-1">
+              Settlements you make from the dashboard will appear here.
+            </p>
+          </div>
         ) : (
           <ul className="space-y-3">
             {payments.map(p => (
-              <li
-                key={p.id}
-                className="rounded-2xl bg-white border border-neutral-200 shadow-sm p-4"
-              >
+              <li key={p.id} className="rounded-3xl bg-white border border-slate-100 shadow-sm p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-neutral-900 truncate">
-                      {p.engagement?.worker?.full_name ?? 'Unknown helper'}
-                    </p>
-                    <p className="text-xs text-neutral-500 capitalize">
-                      {(p.engagement?.worker?.specialty ?? '').replace('_', ' ') || 'Salary settlement'}
-                    </p>
-                    <p className="mt-1 flex items-center gap-1 text-[11px] text-neutral-400">
-                      <Calendar size={11} />
-                      {formatDate(p.created_at)}
-                    </p>
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className={`h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                      p.status === 'completed' ? 'bg-emerald-50' :
+                      p.status === 'failed'    ? 'bg-rose-50' : 'bg-amber-50'
+                    }`}>
+                      {p.status === 'completed' ? (
+                        <CheckCircle2 size={18} className="text-emerald-600" />
+                      ) : p.status === 'failed' ? (
+                        <XCircle size={18} className="text-rose-500" />
+                      ) : (
+                        <Clock size={18} className="text-amber-500" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-900 text-[15px] truncate">
+                        {p.engagement?.worker?.full_name ?? 'Unknown helper'}
+                      </p>
+                      <p className="text-xs text-slate-400 capitalize mt-0.5">
+                        {(p.engagement?.worker?.specialty ?? '').replace(/_/g, ' ') || 'Salary'}
+                      </p>
+                      <p className="mt-1 flex items-center gap-1 text-[11px] text-slate-300">
+                        <Calendar size={10} />
+                        {formatDate(p.created_at)}
+                      </p>
+                    </div>
                   </div>
+
                   <div className="text-right shrink-0">
-                    <p className="text-base font-semibold text-neutral-900 flex items-center justify-end">
+                    <p className="text-lg font-black text-slate-900 flex items-center justify-end">
                       <IndianRupee size={14} />
                       {p.amount.toLocaleString('en-IN')}
                     </p>
@@ -124,7 +133,7 @@ export default async function PaymentsPage() {
                 </div>
 
                 {(p.utr || p.upi_txn_ref) && (
-                  <p className="mt-2 border-t border-neutral-100 pt-2 text-[11px] text-neutral-400 font-mono truncate">
+                  <p className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-300 font-mono truncate">
                     {p.utr ? `UTR · ${p.utr}` : `Ref · ${p.upi_txn_ref}`}
                   </p>
                 )}
@@ -138,38 +147,22 @@ export default async function PaymentsPage() {
 }
 
 function StatusPill({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string; Icon: React.ComponentType<{ size?: number; className?: string }> }> = {
-    completed: { label: 'Paid',      cls: 'bg-emerald-50 text-emerald-700', Icon: CheckCircle2 },
-    pending:   { label: 'Pending',   cls: 'bg-amber-50 text-amber-700',     Icon: Clock },
-    initiated: { label: 'Initiated', cls: 'bg-amber-50 text-amber-700',     Icon: Clock },
-    failed:    { label: 'Failed',    cls: 'bg-rose-50 text-rose-700',       Icon: XCircle },
+  const map: Record<string, { label: string; cls: string }> = {
+    completed: { label: 'Paid',      cls: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+    initiated: { label: 'Initiated', cls: 'bg-amber-50 text-amber-700 border-amber-100' },
+    pending:   { label: 'Pending',   cls: 'bg-amber-50 text-amber-700 border-amber-100' },
+    failed:    { label: 'Failed',    cls: 'bg-rose-50 text-rose-700 border-rose-100' },
   }
-  const meta = map[status] ?? { label: status, cls: 'bg-neutral-100 text-neutral-600', Icon: Clock }
-  const Icon = meta.Icon
+  const meta = map[status] ?? { label: status, cls: 'bg-slate-100 text-slate-600 border-slate-200' }
   return (
-    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.cls}`}>
-      <Icon size={11} />
+    <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold ${meta.cls}`}>
       {meta.label}
     </span>
   )
 }
 
-function EmptyState() {
-  return (
-    <div className="rounded-2xl bg-white border border-dashed border-neutral-300 p-8 text-center">
-      <p className="text-sm text-neutral-600">No payments yet.</p>
-      <p className="mt-1 text-xs text-neutral-400">
-        Settlements you make from the dashboard will show up here.
-      </p>
-    </div>
-  )
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric',
   })
 }

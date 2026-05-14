@@ -2,11 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Respect iPhone safe area on the bottom nav */
+/* ── Safe area (iPhone notch / home indicator) ── */
 @layer utilities {
   .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
-  .pt-safe { padding-top:  env(safe-area-inset-top); }
+  .pt-safe { padding-top:    env(safe-area-inset-top); }
 }
 
-/* No tap highlight on mobile (looks more native) */
+/* ── Mobile-native feel ── */
 * { -webkit-tap-highlight-color: transparent; }
+
+/* ── Smooth scroll ── */
+html { scroll-behavior: smooth; }
+
+/* ── Hide scrollbars on filter chips ── */
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── Base typography ── */
+@layer base {
+  body {
+    @apply text-slate-900 antialiased;
+    font-feature-settings: "kern" 1, "liga" 1;
+  }
+}

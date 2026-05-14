@@ -1,21 +1,17 @@
 'use client'
 /**
- * AttendanceToggle — single-day quick-mark widget shown on the dashboard.
- * For full-month calendar editing, see components/AttendanceCalendar.tsx.
+ * AttendanceToggle — quick-mark widget for today's attendance.
+ * Optimistic UI + Supabase upsert/delete.
  */
 import { useOptimistic, useTransition } from 'react'
-import { Check, X, Circle } from 'lucide-react'
+import { Check, X, RotateCcw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 type Status = 'present' | 'absent' | null
 
-interface Props {
-  engagementId: string
-  date: string                 // YYYY-MM-DD (usually today)
-  initial: Status
-}
-
-export default function AttendanceToggle({ engagementId, date, initial }: Props) {
+export default function AttendanceToggle({
+  engagementId, date, initial,
+}: { engagementId: string; date: string; initial: Status }) {
   const [pending, start] = useTransition()
   const [optimistic, setOptimistic] = useOptimistic<Status>(initial)
 
@@ -27,48 +23,65 @@ export default function AttendanceToggle({ engagementId, date, initial }: Props)
         await supabase.from('attendance').delete()
           .eq('engagement_id', engagementId).eq('date', date)
       } else {
-        // Upsert — one row per (engagement, date), enforced by unique constraint.
         await supabase.from('attendance').upsert(
           { engagement_id: engagementId, date, status: next },
-          { onConflict: 'engagement_id,date' }
+          { onConflict: 'engagement_id,date' },
         )
       }
     })
   }
 
   return (
-    <div className="inline-flex rounded-full bg-neutral-100 p-0.5" aria-busy={pending}>
-      <Btn active={optimistic === 'present'} onClick={() => mark('present')}
-           color="emerald" Icon={Check} label="Present" />
-      <Btn active={optimistic === 'absent'} onClick={() => mark('absent')}
-           color="rose" Icon={X} label="Absent" />
-      <Btn active={optimistic === null} onClick={() => mark(null)}
-           color="neutral" Icon={Circle} label="Clear" />
+    <div
+      className={`inline-flex items-center rounded-2xl bg-slate-100 p-1 gap-0.5 transition-opacity ${pending ? 'opacity-60' : ''}`}
+      aria-busy={pending}
+    >
+      <ToggleBtn
+        active={optimistic === 'present'}
+        onClick={() => mark(optimistic === 'present' ? null : 'present')}
+        label="Present"
+        activeClass="bg-emerald-500 text-white shadow-sm"
+        icon={<Check size={13} strokeWidth={2.5} />}
+      />
+      <ToggleBtn
+        active={optimistic === 'absent'}
+        onClick={() => mark(optimistic === 'absent' ? null : 'absent')}
+        label="Absent"
+        activeClass="bg-rose-500 text-white shadow-sm"
+        icon={<X size={13} strokeWidth={2.5} />}
+      />
+      {optimistic !== null && (
+        <ToggleBtn
+          active={false}
+          onClick={() => mark(null)}
+          label="Clear"
+          activeClass=""
+          icon={<RotateCcw size={11} strokeWidth={2} />}
+        />
+      )}
     </div>
   )
 }
 
-function Btn({ active, onClick, color, Icon, label }: {
-  active: boolean
-  onClick: () => void
-  color: 'emerald' | 'rose' | 'neutral'
-  Icon: React.ComponentType<{ size?: number }>
-  label: string
+function ToggleBtn({
+  active, onClick, label, activeClass, icon,
+}: {
+  active: boolean; onClick: () => void; label: string
+  activeClass: string; icon: React.ReactNode
 }) {
-  const palette = {
-    emerald: 'bg-emerald-500 text-white',
-    rose:    'bg-rose-500 text-white',
-    neutral: 'bg-neutral-300 text-neutral-700',
-  }[color]
   return (
     <button
+      type="button"
       onClick={onClick}
       aria-label={label}
-      className={`flex h-7 w-7 items-center justify-center rounded-full transition ${
-        active ? palette : 'text-neutral-400 hover:text-neutral-600'
+      className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold transition ${
+        active
+          ? activeClass
+          : 'text-slate-400 hover:text-slate-600 hover:bg-slate-200'
       }`}
     >
-      <Icon size={14} />
+      {icon}
+      <span className="text-[11px]">{label}</span>
     </button>
   )
 }
