@@ -1,48 +1,47 @@
 /**
- * PROFILE — Account & Settings
- * Route: /profile
+ * /profile — Account & Settings
  */
 import { redirect } from 'next/navigation'
-import { Mail, Phone, Home as HomeIcon, BadgeCheck } from 'lucide-react'
+import Link from 'next/link'
+import { Mail, Phone, Home as HomeIcon, BadgeCheck, ShieldCheck } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
 import LogoutButton from './LogoutButton'
 import DeleteAccountButton from './DeleteAccountButton'
+import AvailabilityToggle from './AvailabilityToggle'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProfilePage() {
   const supabase = createServerClient()
-
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name, flat_number, phone, role')
-    .eq('id', user.id)
-    .single()
+    .from('profiles').select('full_name, flat_number, phone, role').eq('id', user.id).single()
 
-  const name     = profile?.full_name ?? 'Resident'
-  const initials = name.split(' ').map((s: string) => s[0]).slice(0, 2).join('').toUpperCase()
   const isWorker = profile?.role === 'worker'
+  const name     = profile?.full_name ?? (isWorker ? 'Worker' : 'Resident')
+  const initials = name.split(' ').map((s: string) => s[0]).slice(0, 2).join('').toUpperCase()
+
+  let workerRow: { id: string; is_available: boolean } | null = null
+  if (isWorker) {
+    const { data } = await supabase
+      .from('workers').select('id, is_available').eq('auth_id', user.id).maybeSingle()
+    workerRow = data
+  }
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-24">
-
-      {/* ── Header ── */}
+    <main className="min-h-screen bg-slate-50 pb-28">
       <header className="bg-white px-5 pt-14 pb-5 border-b border-slate-100">
         <h1 className="text-2xl font-black text-slate-900">Profile</h1>
         <p className="text-xs text-slate-400 mt-0.5">Your account details</p>
       </header>
 
-      {/* ── Identity card ── */}
+      {/* Identity card */}
       <section className="px-5 mt-5">
         <div className="rounded-3xl bg-white border border-slate-100 shadow-sm overflow-hidden">
-          {/* Avatar strip */}
           <div className={`px-5 py-6 flex items-center gap-4 ${
-            isWorker
-              ? 'bg-gradient-to-br from-emerald-600 to-teal-500'
-              : 'bg-gradient-to-br from-violet-700 to-violet-500'
+            isWorker ? 'bg-gradient-to-br from-emerald-600 to-teal-500' : 'bg-gradient-to-br from-violet-700 to-violet-500'
           }`}>
             <div className="h-16 w-16 rounded-2xl bg-white/20 border-2 border-white/40 flex items-center justify-center">
               <span className="text-white font-black text-xl">{initials}</span>
@@ -58,30 +57,44 @@ export default async function ProfilePage() {
               </span>
             </div>
           </div>
-
-          {/* Detail rows */}
-          <DetailRow icon={Mail}     label="Email"  value={user.email ?? '—'} />
-          <DetailRow icon={Phone}    label="Phone"  value={profile?.phone ?? 'Not added'} />
-          <DetailRow icon={HomeIcon} label="Flat"   value={profile?.flat_number ?? 'Not added'} last />
+          <DetailRow icon={Mail}     label="Email" value={user.email ?? '—'} />
+          <DetailRow icon={Phone}    label="Phone" value={profile?.phone ?? 'Not added'} />
+          <DetailRow icon={HomeIcon} label="Flat"  value={profile?.flat_number ?? 'Not added'} last />
         </div>
       </section>
 
-      {/* ── Actions ── */}
-      <section className="px-5 mt-5 space-y-3">
+      {/* Worker availability toggle */}
+      {isWorker && workerRow && (
+        <section className="px-5 mt-4">
+          <div className="rounded-3xl bg-white border border-slate-100 shadow-sm px-5 py-4">
+            <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Availability</p>
+            <AvailabilityToggle workerId={workerRow.id} initialAvailable={workerRow.is_available} />
+          </div>
+        </section>
+      )}
+
+      {/* Actions */}
+      <section className="px-5 mt-4 space-y-3">
+        <Link href="/change-password"
+          className="flex items-center gap-3 bg-white border border-slate-100 rounded-3xl px-5 py-4 shadow-sm active:bg-slate-50 transition min-h-[64px]">
+          <div className="h-9 w-9 rounded-2xl bg-amber-50 flex items-center justify-center shrink-0">
+            <ShieldCheck size={16} className="text-amber-600" />
+          </div>
+          <div>
+            <p className="font-bold text-slate-900 text-[14px]">Change password</p>
+            <p className="text-xs text-slate-400">Update your sign-in password</p>
+          </div>
+        </Link>
         <LogoutButton />
         <DeleteAccountButton />
       </section>
 
-      <p className="mt-8 text-center text-[11px] text-slate-300">
-        Society Helper · v1.0
-      </p>
+      <p className="mt-8 text-center text-[11px] text-slate-300">Society Helper · v2.0</p>
     </main>
   )
 }
 
-function DetailRow({
-  icon: Icon, label, value, last = false,
-}: {
+function DetailRow({ icon: Icon, label, value, last = false }: {
   icon: React.ComponentType<{ size?: number; className?: string }>
   label: string; value: string; last?: boolean
 }) {

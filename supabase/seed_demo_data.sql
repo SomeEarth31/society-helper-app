@@ -1,47 +1,32 @@
 -- ============================================================
--- SOCIETY HELPER — DEMO DATA SEED  (v3: two worker test accounts)
+-- SOCIETY HELPER — DEMO SEED v6
 -- ============================================================
--- Populates your account with realistic test data.
+-- Run in: Supabase Dashboard → SQL Editor → New query → Run
 --
--- ╔══════════════════════════════════════════════════════════╗
--- ║  HOW TO RUN                                              ║
--- ║  1. Supabase Dashboard → SQL Editor → New query          ║
--- ║  2. Paste this whole file and click "Run"                ║
--- ║                                                          ║
--- ║  HOW TO REMOVE                                           ║
--- ║  Run cleanup_demo_data.sql                               ║
--- ╚══════════════════════════════════════════════════════════╝
+-- PREREQUISITE: both users must already have onboarded through
+-- the app. This script LOOKS UP existing auth users by email —
+-- it does NOT create them. If either user is missing, the script
+-- raises a clear error and aborts.
 --
--- TEST ACCOUNTS (created by this seed):
---   Resident (your account): samarth.2kumar@gmail.com
---   Worker 1 (demo):         worker@test.com       / password123
---   Worker 2 (your iitk):   samarthk21@iitk.ac.in / password123
+-- Expected auth users:
+--   Resident:  samarth.2kumar@gmail.com   (role = resident)
+--   Worker:    samarthk21@iitk.ac.in       (role = worker)
 --
--- Worker 2 (samarthk21@iitk.ac.in) is:
---   • Specialty: cook
---   • Hired by samarth.2kumar@gmail.com
---   • Has attendance for current month (mostly present)
---   • Has a completed payment this month → earnings show up on worker dashboard
---
--- Idempotent: re-running upserts by fixed UUIDs.
+-- Re-running is safe (ON CONFLICT everywhere, idempotent UUIDs).
 -- ============================================================
 
 DO $$
 DECLARE
-  v_user_email   text := 'samarth.2kumar@gmail.com';
-  v_user_id      uuid;
-  v_society_id   uuid;
-  v_month_start  date := date_trunc('month', now())::date;
+  -- ── Onboarded users (looked up by email) ──────────────────
+  v_resident_email text := 'samarth.2kumar@gmail.com';
+  v_worker_email   text := 'samarthk21@iitk.ac.in';
+  v_resident_id    uuid;
+  v_worker2_id     uuid;
 
-  -- Worker 1: worker@test.com (linked to Lakshmi Devi)
-  v_worker1_auth_id uuid := '33333333-3333-3333-3333-000000000001';
-  v_worker1_email   text := 'worker@test.com';
+  v_society_id     uuid := '99999999-9999-9999-9999-000000000001';
+  v_month_start    date := date_trunc('month', now())::date;
 
-  -- Worker 2: samarthk21@iitk.ac.in (cook, hired by resident)
-  v_worker2_auth_id uuid := '33333333-3333-3333-3333-000000000002';
-  v_worker2_email   text := 'samarthk21@iitk.ac.in';
-
-  -- Worker UUIDs
+  -- Worker directory UUIDs
   w_lakshmi  uuid := '11111111-1111-1111-1111-000000000001';
   w_ramesh   uuid := '11111111-1111-1111-1111-000000000002';
   w_priya    uuid := '11111111-1111-1111-1111-000000000003';
@@ -57,21 +42,20 @@ DECLARE
   w_kavita   uuid := '11111111-1111-1111-1111-000000000013';
   w_manoj    uuid := '11111111-1111-1111-1111-000000000014';
   w_pooja    uuid := '11111111-1111-1111-1111-000000000015';
-  -- Worker 2's directory row
-  w_samarth_iitk uuid := '11111111-1111-1111-1111-000000000020';
+  w_samarth_iitk uuid; -- resolved below to the worker row already created during onboarding
 
-  -- Engagement UUIDs
+  -- Engagements
   e_lakshmi      uuid := '22222222-2222-2222-2222-000000000001';
   e_ramesh       uuid := '22222222-2222-2222-2222-000000000002';
   e_samarth_iitk uuid := '22222222-2222-2222-2222-000000000003';
 
-  -- Payment UUIDs
-  p_old         uuid := '33333333-3333-3333-3333-000000000010';
-  p_recent      uuid := '33333333-3333-3333-3333-000000000011';
-  p_iitk_month  uuid := '33333333-3333-3333-3333-000000000013';
-  p_completed   uuid := '33333333-3333-3333-3333-000000000012';
+  -- Payments
+  p_old       uuid := '33333333-3333-3333-3333-000000000010';
+  p_recent    uuid := '33333333-3333-3333-3333-000000000011';
+  p_completed uuid := '33333333-3333-3333-3333-000000000012';
+  p_iitk      uuid := '33333333-3333-3333-3333-000000000013';
 
-  -- Job posting UUIDs
+  -- Job postings
   j_maid   uuid := '44444444-4444-4444-4444-000000000001';
   j_cook   uuid := '44444444-4444-4444-4444-000000000002';
   j_car    uuid := '44444444-4444-4444-4444-000000000003';
@@ -79,198 +63,72 @@ DECLARE
 BEGIN
 
   -- ──────────────────────────────────────────────────────────
-  -- 1. Resolve the resident auth user.
+  -- 1. Resolve auth user IDs from the emails the user onboarded with
   -- ──────────────────────────────────────────────────────────
-  SELECT id INTO v_user_id FROM auth.users WHERE email = v_user_email LIMIT 1;
+  SELECT id INTO v_resident_id FROM auth.users WHERE email = v_resident_email LIMIT 1;
+  IF v_resident_id IS NULL THEN
+    RAISE EXCEPTION 'Resident auth user "%" not found. Sign up & onboard that user in the app first.', v_resident_email;
+  END IF;
 
-  IF v_user_id IS NULL THEN
-    RAISE EXCEPTION
-      'No auth.users row found for %. Log in once via the app first, then re-run this seed.',
-      v_user_email;
+  SELECT id INTO v_worker2_id FROM auth.users WHERE email = v_worker_email LIMIT 1;
+  IF v_worker2_id IS NULL THEN
+    RAISE EXCEPTION 'Worker auth user "%" not found. Sign up & onboard that user in the app first.', v_worker_email;
+  END IF;
+
+  -- The worker row was created by onboarding; grab its id (used for engagements/applications/etc.)
+  SELECT id INTO w_samarth_iitk FROM workers WHERE auth_id = v_worker2_id LIMIT 1;
+  IF w_samarth_iitk IS NULL THEN
+    RAISE EXCEPTION 'No workers row linked to "%". The worker onboarding step did not complete.', v_worker_email;
   END IF;
 
   -- ──────────────────────────────────────────────────────────
-  -- 2. Resident profile + society
+  -- 2. Society — make sure the demo society exists & both profiles are attached
   -- ──────────────────────────────────────────────────────────
-  INSERT INTO profiles (id, full_name, flat_number, phone, role)
-  VALUES (v_user_id, 'Samarth Kumar', 'A-204', '+919812345678', 'resident')
-  ON CONFLICT (id) DO UPDATE SET
-    full_name   = COALESCE(profiles.full_name,   EXCLUDED.full_name),
-    flat_number = COALESCE(profiles.flat_number, EXCLUDED.flat_number),
-    phone       = COALESCE(profiles.phone,       EXCLUDED.phone),
-    role        = COALESCE(profiles.role,        EXCLUDED.role);
+  INSERT INTO societies (id, name, city)
+  VALUES (v_society_id, '[DEMO] Sunrise Apartments', 'Bengaluru')
+  ON CONFLICT (id) DO NOTHING;
 
-  SELECT society_id INTO v_society_id FROM profiles WHERE id = v_user_id;
+  -- Attach both profiles to the demo society (without overwriting onboarding name/flat)
+  UPDATE profiles
+     SET society_id = v_society_id,
+         role       = 'resident',
+         full_name  = COALESCE(full_name, 'Samarth Kumar'),
+         flat_number = COALESCE(flat_number, 'A-204')
+   WHERE id = v_resident_id;
 
-  IF v_society_id IS NULL THEN
-    v_society_id := '99999999-9999-9999-9999-000000000001';
-    INSERT INTO societies (id, name, city)
-    VALUES (v_society_id, '[DEMO] Sunrise Apartments', 'Bengaluru')
-    ON CONFLICT (id) DO NOTHING;
-    UPDATE profiles SET society_id = v_society_id WHERE id = v_user_id;
-  END IF;
+  UPDATE profiles
+     SET society_id = v_society_id,
+         role       = 'worker',
+         full_name  = COALESCE(full_name, 'Samarth K (Cook)')
+   WHERE id = v_worker2_id;
 
-  -- ──────────────────────────────────────────────────────────
-  -- 3. Worker 1 auth: worker@test.com / password123
-  -- ──────────────────────────────────────────────────────────
-  INSERT INTO auth.users (
-    id, instance_id, aud, role, email, encrypted_password,
-    email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-    created_at, updated_at, confirmation_token, recovery_token,
-    email_change_token_new, email_change
-  ) VALUES (
-    v_worker1_auth_id,
-    '00000000-0000-0000-0000-000000000000',
-    'authenticated', 'authenticated',
-    v_worker1_email,
-    crypt('password123', gen_salt('bf')),
-    now(),
-    '{"provider":"email","providers":["email"]}', '{}',
-    now(), now(), '', '', '', ''
-  ) ON CONFLICT (id) DO UPDATE SET
-    encrypted_password = EXCLUDED.encrypted_password,
-    email_confirmed_at = COALESCE(auth.users.email_confirmed_at, now()),
-    updated_at         = now();
-
-  INSERT INTO profiles (id, full_name, phone, society_id, role)
-  VALUES (v_worker1_auth_id, '[DEMO] Lakshmi Devi', '+919900000001', v_society_id, 'worker')
-  ON CONFLICT (id) DO UPDATE SET
-    full_name  = EXCLUDED.full_name,
-    society_id = EXCLUDED.society_id,
-    role       = EXCLUDED.role;
+  -- Keep the onboarded workers row inside the demo society too
+  UPDATE workers
+     SET society_id = v_society_id
+   WHERE id = w_samarth_iitk;
 
   -- ──────────────────────────────────────────────────────────
-  -- 4. Worker 2 auth: samarthk21@iitk.ac.in / password123
-  --    If the email already exists (real account), reuse that UUID.
-  --    Only INSERT if the email is truly new.
+  -- 3. Workers directory (15 fake demo workers + the onboarded one above)
   -- ──────────────────────────────────────────────────────────
-  SELECT id INTO v_worker2_auth_id FROM auth.users WHERE email = v_worker2_email LIMIT 1;
-
-  IF v_worker2_auth_id IS NULL THEN
-    -- Brand-new email: insert with fixed UUID
-    v_worker2_auth_id := '33333333-3333-3333-3333-000000000002';
-    INSERT INTO auth.users (
-      id, instance_id, aud, role, email, encrypted_password,
-      email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-      created_at, updated_at, confirmation_token, recovery_token,
-      email_change_token_new, email_change
-    ) VALUES (
-      v_worker2_auth_id,
-      '00000000-0000-0000-0000-000000000000',
-      'authenticated', 'authenticated',
-      v_worker2_email,
-      crypt('password123', gen_salt('bf')),
-      now(),
-      '{"provider":"email","providers":["email"]}', '{}',
-      now(), now(), '', '', '', ''
-    );
-  ELSE
-    -- Email already exists — just update password to known value for testing
-    UPDATE auth.users SET
-      encrypted_password = crypt('password123', gen_salt('bf')),
-      email_confirmed_at = COALESCE(email_confirmed_at, now()),
-      updated_at         = now()
-    WHERE id = v_worker2_auth_id;
-  END IF;
-
-  INSERT INTO profiles (id, full_name, phone, society_id, role)
-  VALUES (v_worker2_auth_id, 'Samarth K (Cook)', '+919900000020', v_society_id, 'worker')
-  ON CONFLICT (id) DO UPDATE SET
-    full_name  = EXCLUDED.full_name,
-    society_id = EXCLUDED.society_id,
-    role       = EXCLUDED.role;
-
-  -- ──────────────────────────────────────────────────────────
-  -- 5. Workers directory — 15 demo + Worker 2 row
-  -- ──────────────────────────────────────────────────────────
-  INSERT INTO workers
-    (id, society_id, auth_id, full_name, phone, specialty,
-     bio, experience_years, monthly_rate, daily_rate, trust_score, photo_url, upi_id)
+  INSERT INTO workers (id, society_id, auth_id, full_name, phone, specialty, bio, experience_years, monthly_rate, daily_rate, trust_score, photo_url, upi_id, is_active, is_available)
   VALUES
-    (w_lakshmi, v_society_id, v_worker1_auth_id,
-       '[DEMO] Lakshmi Devi',  '+919900000001', 'maid',
-       'Honest and punctual. 10+ years cleaning homes.', 12, 7000, 300, 4.8,
-       'https://i.pravatar.cc/300?img=47', 'lakshmi@okhdfc'),
-
-    (w_ramesh, v_society_id, null,
-       '[DEMO] Ramesh Kumar',  '+919900000002', 'cook',
-       'North & South Indian veg. Comfortable with Jain meals.', 8, 12000, 500, 4.6,
-       'https://i.pravatar.cc/300?img=68', 'ramesh@okicici'),
-
-    (w_priya, v_society_id, null,
-       '[DEMO] Priya Sharma',  '+919900000003', 'caretaker',
-       'Elder care + medication reminders.', 7, 15000, 600, 4.9,
-       'https://i.pravatar.cc/300?img=44', 'priya@okaxis'),
-
-    (w_arjun, v_society_id, null,
-       '[DEMO] Arjun Singh',   '+919900000004', 'other',
-       'Plumbing, electrical and minor repairs.', 10, 18000, 750, 4.4,
-       'https://i.pravatar.cc/300?img=12', 'arjun@oksbi'),
-
-    (w_meera, v_society_id, null,
-       '[DEMO] Meera Patel',   '+919900000005', 'maid',
-       'Quick and reliable, double-shift available.', 4, 6500, 280, 4.2,
-       'https://i.pravatar.cc/300?img=23', 'meera@okhdfc'),
-
-    (w_suresh, v_society_id, null,
-       '[DEMO] Suresh Yadav',  '+919900000006', 'gardener',
-       'Lawn, balcony plants, weekly pruning.', 9, 5500, 240, 4.0,
-       'https://i.pravatar.cc/300?img=15', 'suresh@okicici'),
-
-    (w_anita, v_society_id, null,
-       '[DEMO] Anita Reddy',   '+919900000007', 'caretaker',
-       'Live-in caretaker for elderly couples.', 15, 28000, 1100, 4.8,
-       'https://i.pravatar.cc/300?img=32', 'anita@okaxis'),
-
-    (w_imran, v_society_id, null,
-       '[DEMO] Imran Khan',    '+919900000008', 'cook',
-       'Mughlai, biryani, kebabs. Non-veg specialist.', 10, 18000, 750, 4.8,
-       'https://i.pravatar.cc/300?img=51', 'imran@oksbi'),
-
-    (w_geeta, v_society_id, null,
-       '[DEMO] Geeta Kulkarni','+919900000009', 'cook',
-       'Maharashtrian veg, tiffin-style lunchboxes.', 6, 13000, 550, 4.5,
-       'https://i.pravatar.cc/300?img=10', 'geeta@okhdfc'),
-
-    (w_vikram, v_society_id, null,
-       '[DEMO] Vikram Das',    '+919900000010', 'car_washer',
-       'Premium polish + interior detailing.', 5, 5500, 220, 4.6,
-       'https://i.pravatar.cc/300?img=8',  'vikram@okicici'),
-
-    (w_sunita, v_society_id, null,
-       '[DEMO] Sunita Rao',    '+919900000011', 'gardener',
-       'Indoor plants & terrace garden setup.', 4, 7000, 320, 4.4,
-       'https://i.pravatar.cc/300?img=20', 'sunita@okaxis'),
-
-    (w_arif, v_society_id, null,
-       '[DEMO] Arif Sheikh',   '+919900000012', 'cleaner',
-       'Move-in / move-out deep cleaning, crew of two.', 8, 11000, 480, 4.5,
-       'https://i.pravatar.cc/300?img=33', 'arif@oksbi'),
-
-    (w_kavita, v_society_id, null,
-       '[DEMO] Kavita Joshi',  '+919900000013', 'maid',
-       'Sweeping, mopping, dishes. Available mornings.', 3, 9500, 400, 4.3,
-       'https://i.pravatar.cc/300?img=49', 'kavita@okhdfc'),
-
-    (w_manoj, v_society_id, null,
-       '[DEMO] Manoj Patel',   '+919900000014', 'car_washer',
-       'Daily wash, weekly wax. Brings own supplies.', 4, 4500, 180, 4.4,
-       'https://i.pravatar.cc/300?img=11', 'manoj@okicici'),
-
-    (w_pooja, v_society_id, null,
-       '[DEMO] Pooja Mishra',  '+919900000015', 'cleaner',
-       'Deep cleaning — kitchen, bathrooms, sofas.', 5, 9000, 380, 4.6,
-       'https://i.pravatar.cc/300?img=25', 'pooja@okaxis'),
-
-    -- Worker 2: samarthk21@iitk.ac.in → cook, hired by the resident
-    (w_samarth_iitk, v_society_id, v_worker2_auth_id,
-       'Samarth K (Cook)',      '+919900000020', 'cook',
-       'North Indian veg & non-veg. IIT trained — yes really.', 2, 14000, 580, 4.7,
-       'https://i.pravatar.cc/300?img=57', 'samarthk@okhdfc')
-
+    (w_lakshmi, v_society_id, null, '[DEMO] Lakshmi Devi',   '+919900000001', 'maid',       'Honest and punctual. 10+ years.',              12, 7000,  300, 4.8, 'https://i.pravatar.cc/300?img=47', 'lakshmi@okhdfc',  true, true),
+    (w_ramesh,  v_society_id, null, '[DEMO] Ramesh Kumar',   '+919900000002', 'cook',       'North & South Indian veg. Jain meals.',         8, 12000, 500, 4.6, 'https://i.pravatar.cc/300?img=68', 'ramesh@okicici',  true, true),
+    (w_priya,   v_society_id, null, '[DEMO] Priya Sharma',   '+919900000003', 'caretaker',  'Elder care + medication reminders.',            7, 15000, 600, 4.9, 'https://i.pravatar.cc/300?img=44', 'priya@okaxis',    true, true),
+    (w_arjun,   v_society_id, null, '[DEMO] Arjun Singh',    '+919900000004', 'other',      'Plumbing, electrical, minor repairs.',         10, 18000, 750, 4.4, 'https://i.pravatar.cc/300?img=12', 'arjun@oksbi',     true, true),
+    (w_meera,   v_society_id, null, '[DEMO] Meera Patel',    '+919900000005', 'maid',       'Quick and reliable, double-shift available.',   4, 6500,  280, 4.2, 'https://i.pravatar.cc/300?img=23', 'meera@okhdfc',    true, true),
+    (w_suresh,  v_society_id, null, '[DEMO] Suresh Yadav',   '+919900000006', 'gardener',   'Lawn, balcony plants, weekly pruning.',         9, 5500,  240, 4.0, 'https://i.pravatar.cc/300?img=15', 'suresh@okicici',  true, true),
+    (w_anita,   v_society_id, null, '[DEMO] Anita Reddy',    '+919900000007', 'caretaker',  'Live-in caretaker for elderly couples.',       15, 28000, 1100,4.8, 'https://i.pravatar.cc/300?img=32', 'anita@okaxis',    true, true),
+    (w_imran,   v_society_id, null, '[DEMO] Imran Khan',     '+919900000008', 'cook',       'Mughlai, biryani, kebabs. Non-veg specialist.',10, 18000, 750, 4.8, 'https://i.pravatar.cc/300?img=51', 'imran@oksbi',     true, true),
+    (w_geeta,   v_society_id, null, '[DEMO] Geeta Kulkarni', '+919900000009', 'cook',       'Maharashtrian veg, tiffin lunchboxes.',         6, 13000, 550, 4.5, 'https://i.pravatar.cc/300?img=10', 'geeta@okhdfc',    true, true),
+    (w_vikram,  v_society_id, null, '[DEMO] Vikram Das',     '+919900000010', 'car_washer', 'Premium polish + interior detailing.',          5, 5500,  220, 4.6, 'https://i.pravatar.cc/300?img=8',  'vikram@okicici',  true, true),
+    (w_sunita,  v_society_id, null, '[DEMO] Sunita Rao',     '+919900000011', 'gardener',   'Indoor plants & terrace garden setup.',         4, 7000,  320, 4.4, 'https://i.pravatar.cc/300?img=20', 'sunita@okaxis',   true, true),
+    (w_arif,    v_society_id, null, '[DEMO] Arif Sheikh',    '+919900000012', 'cleaner',    'Move-in/out deep cleaning, crew of two.',       8, 11000, 480, 4.5, 'https://i.pravatar.cc/300?img=33', 'arif@oksbi',      true, true),
+    (w_kavita,  v_society_id, null, '[DEMO] Kavita Joshi',   '+919900000013', 'maid',       'Sweeping, mopping, dishes. Mornings.',          3, 9500,  400, 4.3, 'https://i.pravatar.cc/300?img=49', 'kavita@okhdfc',   true, true),
+    (w_manoj,   v_society_id, null, '[DEMO] Manoj Patel',    '+919900000014', 'car_washer', 'Daily wash, weekly wax. Brings own supplies.',  4, 4500,  180, 4.4, 'https://i.pravatar.cc/300?img=11', 'manoj@okicici',   true, true),
+    (w_pooja,   v_society_id, null, '[DEMO] Pooja Mishra',   '+919900000015', 'cleaner',    'Deep cleaning — kitchen, bathrooms, sofas.',    5, 9000,  380, 4.6, 'https://i.pravatar.cc/300?img=25', 'pooja@okaxis',    true, true)
   ON CONFLICT (id) DO UPDATE SET
     society_id       = EXCLUDED.society_id,
-    auth_id          = EXCLUDED.auth_id,
     full_name        = EXCLUDED.full_name,
     phone            = EXCLUDED.phone,
     specialty        = EXCLUDED.specialty,
@@ -280,17 +138,18 @@ BEGIN
     daily_rate       = EXCLUDED.daily_rate,
     trust_score      = EXCLUDED.trust_score,
     photo_url        = EXCLUDED.photo_url,
-    upi_id           = EXCLUDED.upi_id;
+    upi_id           = EXCLUDED.upi_id,
+    is_active        = EXCLUDED.is_active,
+    is_available     = EXCLUDED.is_available;
 
   -- ──────────────────────────────────────────────────────────
-  -- 6. Active engagements
-  --    Lakshmi + iitk cook are hired by the resident.
-  --    Ramesh is also hired (for variety on dashboard).
+  -- 4. Engagements (resident hires 3 workers including samarthk21)
   -- ──────────────────────────────────────────────────────────
-  INSERT INTO engagements (id, employer_id, worker_id, monthly_salary, service_type, status) VALUES
-    (e_lakshmi,      v_user_id, w_lakshmi,      8000,  'maid', 'active'),
-    (e_ramesh,       v_user_id, w_ramesh,        12000, 'cook', 'active'),
-    (e_samarth_iitk, v_user_id, w_samarth_iitk, 14000, 'cook', 'active')
+  INSERT INTO engagements (id, employer_id, worker_id, monthly_salary, service_type, status)
+  VALUES
+    (e_lakshmi,      v_resident_id, w_lakshmi,       8000, 'maid', 'active'),
+    (e_ramesh,       v_resident_id, w_ramesh,       12000, 'cook', 'active'),
+    (e_samarth_iitk, v_resident_id, w_samarth_iitk, 14000, 'cook', 'active')
   ON CONFLICT (id) DO UPDATE SET
     employer_id    = EXCLUDED.employer_id,
     worker_id      = EXCLUDED.worker_id,
@@ -299,65 +158,36 @@ BEGIN
     status         = EXCLUDED.status;
 
   -- ──────────────────────────────────────────────────────────
-  -- 7. Attendance (current month)
+  -- 5. Attendance (current month)
   -- ──────────────────────────────────────────────────────────
   DELETE FROM attendance
    WHERE engagement_id IN (e_lakshmi, e_ramesh, e_samarth_iitk)
      AND date >= v_month_start
      AND date <  (v_month_start + interval '1 month');
 
-  -- Lakshmi: 12 days (day 8 = half day)
   INSERT INTO attendance (engagement_id, date, status)
   SELECT e_lakshmi, v_month_start + (d - 1),
          (CASE WHEN d = 8 THEN 'half_day' ELSE 'present' END)::attendance_status
-    FROM generate_series(1, 12) AS d;
+  FROM generate_series(1, 12) AS d;
 
-  -- Ramesh: 10 days (day 5 = absent)
   INSERT INTO attendance (engagement_id, date, status)
   SELECT e_ramesh, v_month_start + (d - 1),
          (CASE WHEN d = 5 THEN 'absent' ELSE 'present' END)::attendance_status
-    FROM generate_series(1, 10) AS d;
+  FROM generate_series(1, 10) AS d;
 
-  -- Samarth iitk (cook): 9 days, all present
   INSERT INTO attendance (engagement_id, date, status)
   SELECT e_samarth_iitk, v_month_start + (d - 1), 'present'::attendance_status
-    FROM generate_series(1, 9) AS d;
+  FROM generate_series(1, 9) AS d;
 
   -- ──────────────────────────────────────────────────────────
-  -- 8. Payments
+  -- 6. Payments
   -- ──────────────────────────────────────────────────────────
-  INSERT INTO payments
-    (id, engagement_id, amount, period_start, period_end,
-     days_worked, nodal_vpa, upi_txn_ref, utr, status, created_at)
+  INSERT INTO payments (id, engagement_id, amount, period_start, period_end, days_worked, nodal_vpa, upi_txn_ref, utr, status, created_at)
   VALUES
-    -- Last month completed payment (Lakshmi)
-    (p_old, e_lakshmi, 7500,
-       (v_month_start - interval '1 month')::date,
-       (v_month_start - interval '1 day')::date,
-       26, 'samarth@upi', 'SHDEMO0001AAAA', 'SHDEMO0001AAAA', 'completed',
-       (v_month_start - interval '2 days')::timestamptz),
-
-    -- This month initiated (Ramesh)
-    (p_recent, e_ramesh, 4000,
-       v_month_start,
-       (v_month_start + interval '1 month - 1 day')::date,
-       10, 'samarth@upi', 'SHDEMO0002BBBB', null, 'initiated',
-       now()),
-
-    -- This month completed (Lakshmi) — so worker 1 shows earnings
-    (p_completed, e_lakshmi, 3500,
-       v_month_start,
-       (v_month_start + interval '1 month - 1 day')::date,
-       11.5, 'samarth@upi', 'SHDEMO0003CCCC', 'SHDEMO0003CCCC', 'completed',
-       now()),
-
-    -- This month completed (iitk cook) — so worker 2 shows earnings
-    (p_iitk_month, e_samarth_iitk, 4846,
-       v_month_start,
-       (v_month_start + interval '1 month - 1 day')::date,
-       9, 'samarth@upi', 'SHDEMO0004DDDD', 'SHDEMO0004DDDD', 'completed',
-       now())
-
+    (p_old,       e_lakshmi,      7500, (v_month_start - interval '1 month')::date, (v_month_start - interval '1 day')::date,           26,   'samarth@upi', 'SHDEMO0001', 'SHDEMO0001', 'completed', (v_month_start - interval '2 days')::timestamptz),
+    (p_recent,    e_ramesh,       4000, v_month_start,                              (v_month_start + interval '1 month - 1 day')::date, 10,   'samarth@upi', 'SHDEMO0002', null,         'initiated', now()),
+    (p_completed, e_lakshmi,      3500, v_month_start,                              (v_month_start + interval '1 month - 1 day')::date, 11.5, 'samarth@upi', 'SHDEMO0003', 'SHDEMO0003', 'completed', now()),
+    (p_iitk,      e_samarth_iitk, 4846, v_month_start,                              (v_month_start + interval '1 month - 1 day')::date, 9,    'samarth@upi', 'SHDEMO0004', 'SHDEMO0004', 'completed', now())
   ON CONFLICT (id) DO UPDATE SET
     engagement_id = EXCLUDED.engagement_id,
     amount        = EXCLUDED.amount,
@@ -371,35 +201,108 @@ BEGIN
     created_at    = EXCLUDED.created_at;
 
   -- ──────────────────────────────────────────────────────────
-  -- 9. Job postings
+  -- 7. Job postings (resident's open jobs)
   -- ──────────────────────────────────────────────────────────
-  INSERT INTO job_postings
-    (id, society_id, employer_id, specialty, description, offered_salary, status)
+  INSERT INTO job_postings (id, society_id, employer_id, specialty, title, description, schedule, offered_salary, status)
   VALUES
-    (j_maid,   v_society_id, v_user_id, 'maid',
-      '[DEMO] Need a maid for sweeping, mopping & dishes. Mornings, 1.5 hrs.',
-      8000, 'open'),
-    (j_cook,   v_society_id, v_user_id, 'cook',
-      '[DEMO] Part-time cook for veg dinner, 6 days/week.',
-      14000, 'open'),
-    (j_car,    v_society_id, v_user_id, 'car_washer',
-      '[DEMO] Daily car wash (1 sedan), Monday–Saturday.',
-      3500, 'open'),
-    (j_garden, v_society_id, v_user_id, 'gardener',
-      '[DEMO] Weekly maintenance for balcony plants & a small terrace lawn.',
-      5000, 'open')
+    (j_maid,   v_society_id, v_resident_id, 'maid',
+     '[DEMO] Morning maid for 2BHK',
+     'Need a maid for sweeping, mopping & dishes. 1.5 hrs in the morning.',
+     'Mon–Sat, 7am–8:30am', 8000, 'open'),
+    (j_cook,   v_society_id, v_resident_id, 'cook',
+     '[DEMO] Part-time cook — veg dinner',
+     'Part-time cook for vegetarian dinner, 6 days/week. South & North Indian.',
+     'Mon–Sat, 5pm–7pm', 14000, 'open'),
+    (j_car,    v_society_id, v_resident_id, 'car_washer',
+     '[DEMO] Daily car wash',
+     'Daily wash for 1 sedan. Monday to Saturday. Brings own supplies preferred.',
+     'Daily, by 8am', 3500, 'open'),
+    (j_garden, v_society_id, v_resident_id, 'gardener',
+     '[DEMO] Balcony + terrace garden',
+     'Weekly maintenance for balcony plants and a small terrace lawn. ~2 hrs/week.',
+     'Once a week (flexible)', 5000, 'open')
   ON CONFLICT (id) DO UPDATE SET
-    society_id     = EXCLUDED.society_id,
-    employer_id    = EXCLUDED.employer_id,
-    specialty      = EXCLUDED.specialty,
-    description    = EXCLUDED.description,
+    society_id      = EXCLUDED.society_id,
+    employer_id     = EXCLUDED.employer_id,
+    specialty       = EXCLUDED.specialty,
+    title           = EXCLUDED.title,
+    description     = EXCLUDED.description,
+    schedule        = EXCLUDED.schedule,
+    offered_salary  = EXCLUDED.offered_salary,
+    status          = EXCLUDED.status;
+
+  -- ──────────────────────────────────────────────────────────
+  -- 8. Job applications FROM samarthk21 (worker home: My applications)
+  -- ──────────────────────────────────────────────────────────
+  INSERT INTO job_applications (job_posting_id, worker_id, cover_note, status)
+  VALUES
+    (j_cook,   w_samarth_iitk,
+     'I can cook North and South Indian veg meals. Available Mon–Sat evenings.',
+     'pending'),
+    (j_maid,   w_samarth_iitk,
+     'Cross-applying — happy to help with morning cleaning too.',
+     'pending'),
+    (j_garden, w_samarth_iitk,
+     'Have a green thumb on the side. Open to weekly garden upkeep.',
+     'pending')
+  ON CONFLICT (job_posting_id, worker_id) DO NOTHING;
+
+  -- ──────────────────────────────────────────────────────────
+  -- 9. Hire requests TO samarthk21 (worker home: incoming offers)
+  -- ──────────────────────────────────────────────────────────
+  INSERT INTO hire_requests (id, resident_id, worker_id, message, offered_salary, status)
+  VALUES
+    ('55555555-5555-5555-5555-000000000001', v_resident_id, w_samarth_iitk,
+     'Hi Samarth — interested in hiring you for evening dinner. ₹14k/mo OK?',
+     14000, 'pending'),
+    ('55555555-5555-5555-5555-000000000002', v_resident_id, w_priya,
+     'Looking for elder-care help for my mother. Can we chat?',
+     15000, 'pending')
+  ON CONFLICT (id) DO UPDATE SET
+    message        = EXCLUDED.message,
     offered_salary = EXCLUDED.offered_salary,
     status         = EXCLUDED.status;
 
   -- ──────────────────────────────────────────────────────────
+  -- 10. Conversations + chat history
+  -- ──────────────────────────────────────────────────────────
+  INSERT INTO conversations (id, resident_id, worker_id)
+  VALUES
+    ('66666666-6666-6666-6666-000000000001', v_resident_id, w_samarth_iitk),
+    ('66666666-6666-6666-6666-000000000002', v_resident_id, w_lakshmi),
+    ('66666666-6666-6666-6666-000000000003', v_resident_id, w_priya)
+  ON CONFLICT (resident_id, worker_id) DO NOTHING;
+
+  -- Wipe previous demo messages in these threads so re-runs aren't cumulative
+  DELETE FROM messages
+   WHERE conversation_id IN (
+     '66666666-6666-6666-6666-000000000001',
+     '66666666-6666-6666-6666-000000000002',
+     '66666666-6666-6666-6666-000000000003'
+   );
+
+  -- Resident ↔ Samarth K (worker auth = v_worker2_id) — this is the active chat
+  INSERT INTO messages (conversation_id, sender_id, content, is_read, created_at) VALUES
+    ('66666666-6666-6666-6666-000000000001', v_resident_id, 'Hi Samarth, saw your application for the cook role.', true,  now() - interval '3 days'),
+    ('66666666-6666-6666-6666-000000000001', v_worker2_id,  'Hello sir, thank you! When can I start?',           true,  now() - interval '3 days' + interval '5 min'),
+    ('66666666-6666-6666-6666-000000000001', v_resident_id, 'Can you do a trial dinner this Saturday 6pm?',      true,  now() - interval '2 days'),
+    ('66666666-6666-6666-6666-000000000001', v_worker2_id,  'Yes, I will come at 5:45pm to set up.',             true,  now() - interval '2 days' + interval '10 min'),
+    ('66666666-6666-6666-6666-000000000001', v_resident_id, 'Please bring your own knife set if possible.',      false, now() - interval '6 hours'),
+    ('66666666-6666-6666-6666-000000000001', v_worker2_id,  'Sure, I have a full set. Any food allergies?',      false, now() - interval '3 hours');
+
+  -- Resident ↔ Lakshmi (existing engagement; resident-only since Lakshmi has no auth)
+  INSERT INTO messages (conversation_id, sender_id, content, is_read, created_at) VALUES
+    ('66666666-6666-6666-6666-000000000002', v_resident_id, 'Lakshmi, can you come 30 min late tomorrow?', true,  now() - interval '1 day'),
+    ('66666666-6666-6666-6666-000000000002', v_resident_id, 'Tomorrow only — Wednesday onwards normal.',   false, now() - interval '1 day' + interval '1 min');
+
+  -- Resident ↔ Priya (after hire request)
+  INSERT INTO messages (conversation_id, sender_id, content, is_read, created_at) VALUES
+    ('66666666-6666-6666-6666-000000000003', v_resident_id, 'Priya, I sent you a hire request. Free to talk now?', false, now() - interval '2 hours');
+
+  -- ──────────────────────────────────────────────────────────
   RAISE NOTICE 'Seed complete.';
-  RAISE NOTICE '  Resident: % (society=%)', v_user_email, v_society_id;
-  RAISE NOTICE '  Worker 1: % / password123  (Lakshmi Devi, maid)', v_worker1_email;
-  RAISE NOTICE '  Worker 2: % / password123  (Samarth K, cook, hired by resident)', v_worker2_email;
-  RAISE NOTICE '  Workers directory: 16 rows  |  Engagements: 3 active  |  Job postings: 4 open';
+  RAISE NOTICE '  Resident : %  (auth id: %)', v_resident_email, v_resident_id;
+  RAISE NOTICE '  Worker   : %  (auth id: %, worker id: %)', v_worker_email, v_worker2_id, w_samarth_iitk;
+  RAISE NOTICE '  Society  : %  (id: %)', '[DEMO] Sunrise Apartments', v_society_id;
+  RAISE NOTICE '  16 workers | 3 engagements | 4 job postings | 3 applications | 2 hire requests | 3 chat threads';
 END $$;
