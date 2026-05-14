@@ -14,6 +14,7 @@ import { redirect } from 'next/navigation'
 import { Mail, Phone, Home as HomeIcon, BadgeCheck } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
 import LogoutButton from './LogoutButton'
+import DeleteAccountButton from './DeleteAccountButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -92,9 +93,10 @@ export default async function ProfilePage() {
         </div>
       </section>
 
-      {/* Logout */}
-      <section className="px-5 mt-6">
+      {/* Logout + Delete */}
+      <section className="px-5 mt-6 space-y-3">
         <LogoutButton />
+        <DeleteAccountButton />
       </section>
 
       <p className="mt-6 text-center text-[11px] text-neutral-400">
