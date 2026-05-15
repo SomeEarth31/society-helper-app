@@ -26,7 +26,7 @@ export default async function ApplicantsPage({ params }: { params: { id: string 
     .from('job_applications')
     .select(`
       id, cover_note, status, applied_at,
-      worker:workers(id, full_name, specialty, trust_score, daily_rate, photo_url, bio, experience_years)
+      worker:workers(id, full_name, specialty, trust_score, daily_rate, photo_url, bio)
     `)
     .eq('job_posting_id', params.id)
     .order('applied_at', { ascending: false })
@@ -60,7 +60,7 @@ export default async function ApplicantsPage({ params }: { params: { id: string 
                       <AppStatusPill status={app.status} />
                     </div>
                     <p className="text-xs text-slate-400 capitalize mt-0.5">
-                      {(app.worker?.specialty ?? '').replace(/_/g, ' ')} · {app.worker?.experience_years ?? 0}yr exp
+                      {(app.worker?.specialty ?? '').replace(/_/g, ' ')}
                     </p>
                     <div className="flex items-center gap-3 mt-1">
                       <span className="flex items-center gap-1 text-xs">

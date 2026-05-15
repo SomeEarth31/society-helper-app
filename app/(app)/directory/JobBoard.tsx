@@ -102,17 +102,32 @@ export default function JobBoard({
 
   return (
     <div className="space-y-4">
-      <ul className="space-y-3">
-        {primaryJobs.map(job => <JobCard key={job.id} job={job} workerSpecialty={workerSpecialty} applying={applying} onApply={handleApply} onWithdraw={handleWithdraw} />)}
-      </ul>
+      {/* Primary jobs — or empty state if none */}
+      {primaryJobs.length === 0 ? (
+        <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-white p-8 text-center">
+          <Briefcase size={24} className="text-slate-300 mx-auto mb-2" />
+          <p className="font-black text-slate-500 text-sm">
+            {hasSociety ? 'No jobs in your society right now' : 'No jobs matching your specialty'}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">New ones appear instantly when posted</p>
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {primaryJobs.map(job => <JobCard key={job.id} job={job} workerSpecialty={workerSpecialty} applying={applying} onApply={handleApply} onWithdraw={handleWithdraw} />)}
+        </ul>
+      )}
 
       {otherJobs.length > 0 && (
         <div className="space-y-3">
           <button
             onClick={() => setShowOtherSocieties(v => !v)}
-            className="w-full flex items-center justify-between gap-2 text-xs font-bold text-slate-500 px-1 py-2 border-t border-slate-200 pt-4"
+            className="w-full flex items-center justify-between gap-2 text-xs font-bold text-slate-500 px-1 border-t border-slate-200 pt-4"
           >
-            <span>{hasSociety ? `${otherJobs.length} jobs from other societies` : `${otherJobs.length} other jobs`}</span>
+            <span>
+              {hasSociety
+                ? `View ${otherJobs.length} job${otherJobs.length !== 1 ? 's' : ''} from other societies`
+                : `View ${otherJobs.length} other job${otherJobs.length !== 1 ? 's' : ''}`}
+            </span>
             <ChevronDown size={14} className={`transition-transform ${showOtherSocieties ? 'rotate-180' : ''}`} />
           </button>
           {showOtherSocieties && (

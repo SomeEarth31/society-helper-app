@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
 import { RateResidentButton } from '@/components/RateButtons'
+import QuickApplyButton from '@/components/QuickApplyButton'
 
 type WorkerSelf = {
   id: string; full_name: string; specialty: string
@@ -283,6 +284,11 @@ export default async function WorkerDashboard({
                   <p className="mt-2.5 text-xs text-slate-500 line-clamp-2 leading-relaxed">
                     {j.description}
                   </p>
+                )}
+                {worker && (
+                  <div className="mt-3 pt-3 border-t border-slate-100">
+                    <QuickApplyButton jobId={j.id} workerId={worker.id} />
+                  </div>
                 )}
               </li>
             ))}

@@ -347,12 +347,17 @@ begin
   select
     (select count(*)::int from notifications
      where user_id = auth.uid() and not is_read)          as notifications,
-    (select count(*)::int from messages m
-     join conversations c on c.id = m.conversation_id
+    -- Count distinct conversation THREADS with at least one unread message (not total messages)
+    (select count(distinct c.id)::int
+     from conversations c
      where (c.resident_id = auth.uid()
             or c.worker_id in (select id from workers where auth_id = auth.uid()))
-       and m.sender_id != auth.uid()
-       and not m.is_read)                                  as messages;
+       and exists (
+         select 1 from messages m
+         where m.conversation_id = c.id
+           and m.sender_id != auth.uid()
+           and not m.is_read
+       ))                                                  as messages;
 end;
 $$;
 grant execute on function public.get_unread_counts() to authenticated;
@@ -452,20 +457,11 @@ create policy "workers_self_select" on workers
   using (auth_id = auth.uid());
 
 -- Society members can read worker rows:
---   • Workers who have explicitly joined the resident's society via worker_societies, OR
---   • Workers who haven't joined ANY society yet (new workers — visible to everyone so
---     they can be found and invited before they've set their preferred societies).
+-- All authenticated users can see all active workers (residents browse directory,
+-- residents see applicant names regardless of society, workers see own row).
 create policy "workers_society_read" on workers
   for select to authenticated
-  using (
-    id in (
-      select worker_id from worker_societies
-      where society_id = public.my_society_id()
-    )
-    or not exists (
-      select 1 from worker_societies where worker_id = workers.id
-    )
-  );
+  using (auth.uid() is not null);
 
 -- Workers can insert their own row during onboarding.
 create policy "workers_self_insert" on workers

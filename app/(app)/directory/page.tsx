@@ -105,23 +105,46 @@ export default async function DirectoryPage() {
   }
 
   /* ── RESIDENT: worker directory ── */
-  // No .eq('society_id') filter — RLS (workers_society_read) handles visibility:
-  // workers in the resident's society OR workers with no society (visible to all).
+  const residentSocietyId = profile?.society_id ?? null
+
+  // Fetch all active workers; RLS now allows all authenticated users to see all workers.
   const { data: workers } = await supabase
     .from('workers')
-    .select('id, full_name, specialty, daily_rate, trust_score, photo_url, is_available')
+    .select('id, full_name, specialty, daily_rate, trust_score, photo_url, is_available, worker_societies(society_id)')
     .eq('is_active', true)
     .order('trust_score', { ascending: false })
-    .returns<WorkerRow[]>()
+
+  // Determine "my society" workers vs "other society" workers.
+  // A worker is "in society" if:
+  //   - They have no worker_societies entries (visible to all), OR
+  //   - They have an entry matching the resident's society
+  const allWorkers = (workers ?? []).map(w => ({
+    id:           w.id,
+    full_name:    w.full_name,
+    specialty:    w.specialty,
+    daily_rate:   w.daily_rate,
+    trust_score:  w.trust_score,
+    photo_url:    w.photo_url,
+    is_available: w.is_available,
+  })) as WorkerRow[]
+
+  const workerSocietyMap: Record<string, string[]> = {}
+  for (const w of (workers ?? [])) {
+    workerSocietyMap[w.id] = ((w as any).worker_societies ?? []).map((ws: any) => ws.society_id)
+  }
 
   return (
     <main className="min-h-screen bg-slate-50 pb-28">
       <header className="bg-white border-b border-slate-100 px-5 pt-14 pb-4 sticky top-0 z-10">
         <h1 className="text-2xl font-black text-slate-900">Directory</h1>
-        <p className="text-xs text-slate-400 mt-0.5">{workers?.length ?? 0} helpers near you</p>
+        <p className="text-xs text-slate-400 mt-0.5">{allWorkers.length} helpers available</p>
       </header>
       <section className="px-5 mt-5">
-        <WorkerList workers={workers ?? []} />
+        <WorkerList
+          workers={allWorkers}
+          residentSocietyId={residentSocietyId}
+          workerSocietyMap={workerSocietyMap}
+        />
       </section>
     </main>
   )

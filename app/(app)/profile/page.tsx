@@ -19,7 +19,7 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, flat_number, phone, role, upi_id, trust_score, resident_reviews(count)')
+    .select('full_name, flat_number, phone, role, upi_id, trust_score, society_id, resident_reviews(count), societies(name)')
     .eq('id', user.id)
     .single()
 
@@ -58,8 +58,12 @@ export default async function ProfilePage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-white font-black text-lg leading-tight truncate">{name}</p>
-              {profile?.flat_number && (
-                <p className="text-white/70 text-xs mt-0.5">Flat {profile.flat_number}</p>
+              {(profile?.flat_number || (profile as any)?.societies?.name) && (
+                <p className="text-white/70 text-xs mt-0.5">
+                  {profile?.flat_number ? `Flat ${profile.flat_number}` : ''}
+                  {profile?.flat_number && (profile as any)?.societies?.name ? ' · ' : ''}
+                  {(profile as any)?.societies?.name ?? ''}
+                </p>
               )}
               <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-bold text-white">
                 <BadgeCheck size={11} />

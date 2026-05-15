@@ -16,7 +16,7 @@ export default async function ChatPage({ params }: { params: { id: string } }) {
   const { data: conv } = await supabase
     .from('conversations')
     .select(`
-      id, resident_id,
+      id, resident_id, worker_id, job_application_id,
       resident:profiles!conversations_resident_id_fkey(id, full_name),
       worker:workers!conversations_worker_id_fkey(id, full_name, specialty, auth_id)
     `)
@@ -37,11 +37,36 @@ export default async function ChatPage({ params }: { params: { id: string } }) {
     .eq('conversation_id', params.id)
     .order('created_at', { ascending: true })
 
-  // Mark messages as read
+  // Mark messages as read on open (clears nav badge)
   await supabase.from('messages')
     .update({ is_read: true })
     .eq('conversation_id', params.id)
     .neq('sender_id', user.id)
+
+  // Fetch application status (to show Accept/Decline in chat if resident)
+  const applicationId: string | null = (conv as any).job_application_id ?? null
+  let applicationStatus: string | null = null
+  if (applicationId) {
+    const { data: app } = await supabase
+      .from('job_applications')
+      .select('status, job_posting_id')
+      .eq('id', applicationId)
+      .single()
+    applicationStatus = app?.status ?? null
+  }
+
+  // Fetch active engagement between this resident + worker (to show Fire button)
+  let engagementId: string | null = null
+  if ((conv as any).resident_id && (conv as any).worker_id) {
+    const { data: eng } = await supabase
+      .from('engagements')
+      .select('id')
+      .eq('employer_id', (conv as any).resident_id)
+      .eq('worker_id', (conv as any).worker_id)
+      .eq('status', 'active')
+      .maybeSingle()
+    engagementId = eng?.id ?? null
+  }
 
   const otherName = isResident
     ? (conv.worker as any)?.full_name ?? 'Helper'
@@ -58,6 +83,11 @@ export default async function ChatPage({ params }: { params: { id: string } }) {
       initialMessages={initialMessages ?? []}
       otherName={otherName}
       otherRole={otherRole}
+      isResident={isResident}
+      applicationId={applicationId}
+      applicationStatus={applicationStatus}
+      engagementId={engagementId}
+      workerId={(conv.worker as any)?.id ?? null}
     />
   )
 }
