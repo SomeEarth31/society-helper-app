@@ -1,5 +1,6 @@
 'use client'
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Search, Star, IndianRupee, UserPlus, SlidersHorizontal, Loader2, CheckCircle2 } from 'lucide-react'
 import type { WorkerRow } from './page'
@@ -17,6 +18,7 @@ type Filter = typeof SPECIALTIES[number]['key']
 
 export default function WorkerList({ workers }: { workers: WorkerRow[] }) {
   const supabase = createClient()
+  const router   = useRouter()
   const [q, setQ]           = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [hiring, setHiring] = useState<string | null>(null)
@@ -41,6 +43,7 @@ export default function WorkerList({ workers }: { workers: WorkerRow[] }) {
     })
     setHired(prev => new Set([...prev, workerId]))
     setHiring(null)
+    router.refresh()
   }
 
   return (

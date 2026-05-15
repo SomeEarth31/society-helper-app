@@ -7,11 +7,13 @@ import { Users, IndianRupee, CalendarCheck, ChevronRight, Plus, TrendingUp } fro
 import { createServerClient } from '@/lib/supabase/server'
 import AttendanceToggle from '@/components/AttendanceToggle'
 import PaymentButton from '@/components/PaymentButton'
+import { RateWorkerButton } from '@/components/RateButtons'
 import { computeDues } from '@/lib/upi'
 
 type Worker = {
   id: string; full_name: string; specialty: string
-  trust_score: number; photo_url: string | null
+  trust_score: number | null; photo_url: string | null
+  reviews: { count: number }[]
 }
 type Engagement = {
   id: string; monthly_salary: number; service_type: string | null; worker: Worker
@@ -29,7 +31,7 @@ export default async function ResidentDashboard({
 
   const { data: engagements } = await supabase
     .from('engagements')
-    .select('id, monthly_salary, service_type, worker:workers ( id, full_name, specialty, trust_score, photo_url )')
+    .select('id, monthly_salary, service_type, worker:workers ( id, full_name, specialty, trust_score, photo_url, reviews(count) )')
     .eq('employer_id', userId)
     .eq('status', 'active')
     .returns<Engagement[]>()
@@ -143,12 +145,16 @@ export default async function ResidentDashboard({
                       <p className="font-bold text-slate-900 truncate text-[15px]">
                         {e.worker.full_name}
                       </p>
-                      {/* Replace the existing specialty <p> tag with this to show the hired position */}
                       <p className="text-xs text-slate-400 mt-0.5 capitalize">
                         {e.service_type ? e.service_type : e.worker.specialty.replace(/_/g, ' ')}
-                        <span className="ml-2 text-amber-500 font-semibold">
-                          ★ {e.worker.trust_score.toFixed(1)}
-                        </span>
+                        {e.worker.trust_score != null && (
+                          <span className="ml-2 text-amber-500 font-semibold">
+                            ★ {e.worker.trust_score.toFixed(1)} ({e.worker.reviews?.[0]?.count ?? 0})
+                          </span>
+                        )}
+                        {e.worker.trust_score == null && (
+                          <span className="ml-2 text-slate-400 text-xs">Unrated</span>
+                        )}
                       </p>
                     </div>
                     <ChevronRight size={18} className="text-slate-300 group-hover:text-violet-400 transition shrink-0" />
@@ -187,30 +193,18 @@ export default async function ResidentDashboard({
                       periodEnd={endStr}
                       workerName={e.worker.full_name}
                     />
+                    <RateWorkerButton
+                      engagementId={e.id}
+                      workerId={e.worker.id}
+                      reviewerId={userId}
+                      workerName={e.worker.full_name}
+                      trustScore={e.worker.trust_score}
+                      reviewCount={e.worker.reviews?.[0]?.count ?? 0}
+                    />
                   </div>
                 </li>
               )
             })}
-            {/* Next to <PaymentButton /> in ResidentDashboard.tsx */}
-            <button 
-              onClick={() => {
-                const rating = prompt(`Rate ${e.worker.full_name} from 1 to 5:`);
-                if (rating && Number(rating) >= 1 && Number(rating) <= 5) {
-                  supabase.from('reviews').insert({
-                    engagement_id: e.id,
-                    worker_id: e.worker.id,
-                    reviewer_id: userId,
-                    rating: Number(rating)
-                  }).then(() => {
-                    alert('Rating submitted!');
-                    // Ideally router.refresh() here so the trust_score updates
-                  });
-                }
-              }}
-              className="w-full mt-2 py-2 bg-violet-50 text-violet-700 rounded-xl text-xs font-bold border border-violet-100"
-            >
-              Rate {e.worker.full_name.split(' ')[0]}
-            </button>
           </ul>
         )}
       </section>

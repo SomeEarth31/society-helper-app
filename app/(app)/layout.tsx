@@ -22,12 +22,30 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     unreadMessages = counts?.[0]?.messages ?? 0
   } catch {}
 
+  // Pending hire requests count (workers only)
+  let pendingHireRequests = 0
+  if (profile?.role === 'worker') {
+    try {
+      const { data: workerRow } = await supabase
+        .from('workers').select('id').eq('auth_id', user.id).maybeSingle()
+      if (workerRow?.id) {
+        const { count } = await supabase
+          .from('hire_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('worker_id', workerRow.id)
+          .eq('status', 'pending')
+        pendingHireRequests = count ?? 0
+      }
+    } catch {}
+  }
+
   return (
     <>
       {children}
       <BottomNav
         role={(profile?.role as 'resident' | 'worker' | 'admin') ?? 'resident'}
         unreadMessages={unreadMessages}
+        pendingHireRequests={pendingHireRequests}
       />
     </>
   )

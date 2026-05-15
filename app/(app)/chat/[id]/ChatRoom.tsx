@@ -112,7 +112,7 @@ export default function ChatRoom({
   })
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50">
+    <div className="flex flex-col h-screen pb-20 bg-slate-50">
 
       {/* Header */}
       <header className="bg-white border-b border-slate-100 px-4 pt-12 pb-3 flex items-center gap-3 shadow-sm shrink-0">

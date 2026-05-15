@@ -44,7 +44,8 @@ create table profiles (
   society_id  uuid references societies(id),
   role        user_role default 'resident',
   upi_id      text,
-  trust_score numeric(3,2) default 3.0 check (trust_score between 0 and 5), -- ADD THIS LINE
+  bio         text,
+  trust_score numeric(3,2) default null,
   created_at  timestamptz default now()
 );
 
@@ -58,7 +59,7 @@ create table workers (
   experience_years int default 0,
   monthly_rate     numeric(10,2),
   daily_rate       numeric(10,2),
-  trust_score      numeric(3,2) default 3.0 check (trust_score between 0 and 5),
+  trust_score      numeric(3,2) default null check (trust_score between 0 and 5),
   photo_url        text,
   upi_id           text,
   society_id       uuid references societies(id),
@@ -69,6 +70,15 @@ create table workers (
 create index idx_workers_society   on workers(society_id);
 create index idx_workers_specialty on workers(specialty);
 create index idx_workers_auth      on workers(auth_id);
+
+-- Workers can belong to multiple societies (many-to-many)
+create table worker_societies (
+  worker_id  uuid not null references workers(id) on delete cascade,
+  society_id uuid not null references societies(id) on delete cascade,
+  primary key (worker_id, society_id)
+);
+create index idx_worker_soc_worker  on worker_societies(worker_id);
+create index idx_worker_soc_society on worker_societies(society_id);
 
 create table engagements (
   id             uuid primary key default uuid_generate_v4(),
@@ -308,6 +318,15 @@ returns setof uuid language sql security definer set search_path = public stable
   where w.auth_id = auth.uid()
 $$;
 
+-- Returns the workers.id for the signed-in user. SECURITY DEFINER breaks the
+-- workers_society_read → worker_societies → workers recursion: the
+-- worker_societies_worker_all policy uses this function instead of a direct
+-- subquery on workers, so it never re-enters the workers RLS chain.
+create or replace function public.my_worker_id()
+returns uuid language sql security definer set search_path = public stable as $$
+  select id from public.workers where auth_id = auth.uid()
+$$;
+
 -- Check email existence without OTP side-effect (used by login page)
 create or replace function public.email_exists(check_email text)
 returns boolean language plpgsql security definer set search_path = public as $$
@@ -337,6 +356,7 @@ begin
 end;
 $$;
 grant execute on function public.get_unread_counts() to authenticated;
+grant execute on function public.my_worker_id()      to authenticated;
 
 -- ============================================================
 -- GRANTS — required after a `drop schema public cascade` reset.
@@ -368,6 +388,7 @@ alter table payments         enable row level security;
 alter table job_postings     enable row level security;
 alter table job_applications enable row level security;
 alter table hire_requests    enable row level security;
+alter table worker_societies enable row level security;
 alter table conversations    enable row level security;
 alter table messages         enable row level security;
 alter table notifications    enable row level security;
@@ -381,6 +402,10 @@ create policy "societies_member_read" on societies
   for select using (
     id = public.my_society_id()
   );
+-- Any authenticated user can create a society (needed during onboarding on fresh projects).
+create policy "societies_insert" on societies
+  for insert to authenticated
+  with check (true);
 
 -- ── profiles ──
 -- Self: full access to own row
@@ -390,6 +415,24 @@ create policy "profiles_self_insert" on profiles
   for insert with check (auth.uid() = id);
 create policy "profiles_self_update" on profiles
   for update using (auth.uid() = id);
+
+-- Workers can read profiles of residents who posted open jobs (for job board ratings).
+create policy "profiles_job_employer_read" on profiles
+  for select to authenticated
+  using (
+    id in (select employer_id from job_postings where status = 'open')
+  );
+
+-- Workers can read profiles of employers in their active engagements (for dashboard ratings).
+create policy "profiles_engagement_employer_read" on profiles
+  for select to authenticated
+  using (
+    id in (
+      select e.employer_id from engagements e
+      join workers w on w.id = e.worker_id
+      where w.auth_id = auth.uid()
+    )
+  );
 
 -- Workers can read profiles of residents they share a conversation with (chat display).
 -- Uses a SECURITY DEFINER helper so the workers/conversations lookup does NOT re-enter
@@ -408,10 +451,21 @@ create policy "workers_self_select" on workers
   for select to authenticated
   using (auth_id = auth.uid());
 
--- Society members can read each other's worker rows.
+-- Society members can read worker rows:
+--   • Workers who have explicitly joined the resident's society via worker_societies, OR
+--   • Workers who haven't joined ANY society yet (new workers — visible to everyone so
+--     they can be found and invited before they've set their preferred societies).
 create policy "workers_society_read" on workers
   for select to authenticated
-  using (society_id is not null and society_id = public.my_society_id());
+  using (
+    id in (
+      select worker_id from worker_societies
+      where society_id = public.my_society_id()
+    )
+    or not exists (
+      select 1 from worker_societies where worker_id = workers.id
+    )
+  );
 
 -- Workers can insert their own row during onboarding.
 create policy "workers_self_insert" on workers
@@ -468,9 +522,25 @@ create policy "payments_worker_read" on payments
     )
   );
 
+-- ── worker_societies ──
+-- Everyone can see which societies a worker has joined (needed for the UI).
+create policy "worker_societies_read" on worker_societies
+  for select to authenticated using (true);
+-- Workers can manage their own society memberships.
+-- Uses my_worker_id() (SECURITY DEFINER) to avoid re-entering the workers RLS
+-- chain, which would cause infinite recursion via workers_society_read.
+create policy "worker_societies_worker_all" on worker_societies
+  for all to authenticated
+  using      (worker_id = public.my_worker_id())
+  with check (worker_id = public.my_worker_id());
+
 -- ── job_postings ──
+-- Residents see job postings for their own society.
 create policy "jobpost_society_read" on job_postings
   for select using (society_id = public.my_society_id());
+-- Workers see ALL open job postings (client-side sorts by society relevance).
+create policy "jobpost_worker_read" on job_postings
+  for select using (public.my_worker_id() is not null);
 create policy "jobpost_employer_all" on job_postings
   for all
   using      (auth.uid() = employer_id)
@@ -519,6 +589,9 @@ create policy "msg_participant_all" on messages
       where resident_id = auth.uid()
          or worker_id in (select id from workers where auth_id = auth.uid())
     )
+  )
+  with check (
+    sender_id = auth.uid()
   );
 
 -- ── notifications ──
@@ -529,11 +602,7 @@ create policy "notif_own_all" on notifications
 
 -- ── reviews ──
 create policy "reviews_society_read" on reviews
-  for select using (
-    worker_id in (
-      select id from workers where society_id = public.my_society_id()
-    )
-  );
+  for select using (auth.uid() is not null);
 create policy "reviews_employer_insert" on reviews
   for insert with check (auth.uid() = reviewer_id);
 

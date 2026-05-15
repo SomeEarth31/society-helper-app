@@ -29,8 +29,8 @@ export default function AttendanceToggle({
           { engagement_id: engagementId, date, status: next },
           { onConflict: 'engagement_id,date' },
         )
-        router.refresh();
       }
+      router.refresh()
     })
   }
 

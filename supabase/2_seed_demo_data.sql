@@ -1,18 +1,17 @@
 -- ============================================================
--- SOCIETY HELPER — DEMO SEED v6
+-- SOCIETY HELPER — DEMO SEED v7
 -- ============================================================
--- Run in: Supabase Dashboard → SQL Editor → New query → Run
+-- RUN ORDER:
+--   1. supabase/1_schema.sql          ← run on a fresh project
+--   2. Create both accounts in the app:
+--        Resident:  samarth.2kumar@gmail.com  (role = resident)
+--        Worker:    samarthk21@iitk.ac.in      (role = worker)
+--      Both must complete onboarding so a `profiles` row and
+--      (for the worker) a `workers` row exist before this script.
+--   3. THIS FILE                      ← run after both accounts exist
 --
--- PREREQUISITE: both users must already have onboarded through
--- the app. This script LOOKS UP existing auth users by email —
--- it does NOT create them. If either user is missing, the script
--- raises a clear error and aborts.
---
--- Expected auth users:
---   Resident:  samarth.2kumar@gmail.com   (role = resident)
---   Worker:    samarthk21@iitk.ac.in       (role = worker)
---
--- Re-running is safe (ON CONFLICT everywhere, idempotent UUIDs).
+-- Re-running is safe — ON CONFLICT everywhere, idempotent UUIDs.
+-- To wipe demo data without touching real data: cleanup_demo_data.sql
 -- ============================================================
 
 DO $$
@@ -42,7 +41,7 @@ DECLARE
   w_kavita   uuid := '11111111-1111-1111-1111-000000000013';
   w_manoj    uuid := '11111111-1111-1111-1111-000000000014';
   w_pooja    uuid := '11111111-1111-1111-1111-000000000015';
-  w_samarth_iitk uuid; -- resolved below to the worker row already created during onboarding
+  w_samarth_iitk uuid; -- resolved below from the workers row created during onboarding
 
   -- Engagements
   e_lakshmi      uuid := '22222222-2222-2222-2222-000000000001';
@@ -75,24 +74,24 @@ BEGIN
     RAISE EXCEPTION 'Worker auth user "%" not found. Sign up & onboard that user in the app first.', v_worker_email;
   END IF;
 
-  -- The worker row was created by onboarding; grab its id (used for engagements/applications/etc.)
+  -- The worker row was created by onboarding; grab its id
   SELECT id INTO w_samarth_iitk FROM workers WHERE auth_id = v_worker2_id LIMIT 1;
   IF w_samarth_iitk IS NULL THEN
     RAISE EXCEPTION 'No workers row linked to "%". The worker onboarding step did not complete.', v_worker_email;
   END IF;
 
   -- ──────────────────────────────────────────────────────────
-  -- 2. Society — make sure the demo society exists & both profiles are attached
+  -- 2. Society — create demo society and attach both profiles
   -- ──────────────────────────────────────────────────────────
   INSERT INTO societies (id, name, city)
   VALUES (v_society_id, '[DEMO] Sunrise Apartments', 'Bengaluru')
   ON CONFLICT (id) DO NOTHING;
 
-  -- Attach both profiles to the demo society (without overwriting onboarding name/flat)
+  -- Attach both profiles to the demo society (COALESCE won't overwrite names set during onboarding)
   UPDATE profiles
-     SET society_id = v_society_id,
-         role       = 'resident',
-         full_name  = COALESCE(full_name, 'Samarth Kumar'),
+     SET society_id  = v_society_id,
+         role        = 'resident',
+         full_name   = COALESCE(full_name, 'Samarth Kumar'),
          flat_number = COALESCE(flat_number, 'A-204')
    WHERE id = v_resident_id;
 
@@ -102,13 +101,13 @@ BEGIN
          full_name  = COALESCE(full_name, 'Samarth K (Cook)')
    WHERE id = v_worker2_id;
 
-  -- Keep the onboarded workers row inside the demo society too
+  -- Keep the onboarded worker row in the demo society
   UPDATE workers
      SET society_id = v_society_id
    WHERE id = w_samarth_iitk;
 
   -- ──────────────────────────────────────────────────────────
-  -- 3. Workers directory (15 fake demo workers + the onboarded one above)
+  -- 3. Workers directory (15 fake demo workers)
   -- ──────────────────────────────────────────────────────────
   INSERT INTO workers (id, society_id, auth_id, full_name, phone, specialty, bio, experience_years, monthly_rate, daily_rate, trust_score, photo_url, upi_id, is_active, is_available)
   VALUES
@@ -141,6 +140,14 @@ BEGIN
     upi_id           = EXCLUDED.upi_id,
     is_active        = EXCLUDED.is_active,
     is_available     = EXCLUDED.is_available;
+
+  -- ──────────────────────────────────────────────────────────
+  -- 3b. Populate worker_societies for all workers in this society
+  --     (covers both the 15 demo workers and the onboarded worker)
+  -- ──────────────────────────────────────────────────────────
+  insert into worker_societies (worker_id, society_id)
+  select id, v_society_id from workers where society_id = v_society_id
+  on conflict do nothing;
 
   -- ──────────────────────────────────────────────────────────
   -- 4. Engagements (resident hires 3 workers including samarthk21)
@@ -187,7 +194,7 @@ BEGIN
     (p_old,       e_lakshmi,      7500, (v_month_start - interval '1 month')::date, (v_month_start - interval '1 day')::date,           26,   'samarth@upi', 'SHDEMO0001', 'SHDEMO0001', 'completed', (v_month_start - interval '2 days')::timestamptz),
     (p_recent,    e_ramesh,       4000, v_month_start,                              (v_month_start + interval '1 month - 1 day')::date, 10,   'samarth@upi', 'SHDEMO0002', null,         'initiated', now()),
     (p_completed, e_lakshmi,      3500, v_month_start,                              (v_month_start + interval '1 month - 1 day')::date, 11.5, 'samarth@upi', 'SHDEMO0003', 'SHDEMO0003', 'completed', now()),
-    (p_iitk,      e_samarth_iitk, 4846, v_month_start,                              (v_month_start + interval '1 month - 1 day')::date, 9,    'samarth@upi', 'SHDEMO0004', 'SHDEMO0004', 'completed', now())
+    (p_iitk,      e_samarth_iitk, 4846, v_month_start,                             (v_month_start + interval '1 month - 1 day')::date, 9,    'samarth@upi', 'SHDEMO0004', 'SHDEMO0004', 'completed', now())
   ON CONFLICT (id) DO UPDATE SET
     engagement_id = EXCLUDED.engagement_id,
     amount        = EXCLUDED.amount,
@@ -222,42 +229,34 @@ BEGIN
      'Weekly maintenance for balcony plants and a small terrace lawn. ~2 hrs/week.',
      'Once a week (flexible)', 5000, 'open')
   ON CONFLICT (id) DO UPDATE SET
-    society_id      = EXCLUDED.society_id,
-    employer_id     = EXCLUDED.employer_id,
-    specialty       = EXCLUDED.specialty,
-    title           = EXCLUDED.title,
-    description     = EXCLUDED.description,
-    schedule        = EXCLUDED.schedule,
-    offered_salary  = EXCLUDED.offered_salary,
-    status          = EXCLUDED.status;
+    society_id     = EXCLUDED.society_id,
+    employer_id    = EXCLUDED.employer_id,
+    specialty      = EXCLUDED.specialty,
+    title          = EXCLUDED.title,
+    description    = EXCLUDED.description,
+    schedule       = EXCLUDED.schedule,
+    offered_salary = EXCLUDED.offered_salary,
+    status         = EXCLUDED.status;
 
   -- ──────────────────────────────────────────────────────────
-  -- 8. Job applications FROM samarthk21 (worker home: My applications)
+  -- 8. Job applications FROM samarthk21 (worker: My applications)
   -- ──────────────────────────────────────────────────────────
   INSERT INTO job_applications (job_posting_id, worker_id, cover_note, status)
   VALUES
-    (j_cook,   w_samarth_iitk,
-     'I can cook North and South Indian veg meals. Available Mon–Sat evenings.',
-     'pending'),
-    (j_maid,   w_samarth_iitk,
-     'Cross-applying — happy to help with morning cleaning too.',
-     'pending'),
-    (j_garden, w_samarth_iitk,
-     'Have a green thumb on the side. Open to weekly garden upkeep.',
-     'pending')
+    (j_cook,   w_samarth_iitk, 'I can cook North and South Indian veg meals. Available Mon–Sat evenings.', 'pending'),
+    (j_maid,   w_samarth_iitk, 'Cross-applying — happy to help with morning cleaning too.',                'pending'),
+    (j_garden, w_samarth_iitk, 'Have a green thumb on the side. Open to weekly garden upkeep.',            'pending')
   ON CONFLICT (job_posting_id, worker_id) DO NOTHING;
 
   -- ──────────────────────────────────────────────────────────
-  -- 9. Hire requests TO samarthk21 (worker home: incoming offers)
+  -- 9. Hire requests TO samarthk21 (worker: incoming offers)
   -- ──────────────────────────────────────────────────────────
   INSERT INTO hire_requests (id, resident_id, worker_id, message, offered_salary, status)
   VALUES
     ('55555555-5555-5555-5555-000000000001', v_resident_id, w_samarth_iitk,
-     'Hi Samarth — interested in hiring you for evening dinner. ₹14k/mo OK?',
-     14000, 'pending'),
+     'Hi Samarth — interested in hiring you for evening dinner. ₹14k/mo OK?', 14000, 'pending'),
     ('55555555-5555-5555-5555-000000000002', v_resident_id, w_priya,
-     'Looking for elder-care help for my mother. Can we chat?',
-     15000, 'pending')
+     'Looking for elder-care help for my mother. Can we chat?',               15000, 'pending')
   ON CONFLICT (id) DO UPDATE SET
     message        = EXCLUDED.message,
     offered_salary = EXCLUDED.offered_salary,
@@ -273,7 +272,7 @@ BEGIN
     ('66666666-6666-6666-6666-000000000003', v_resident_id, w_priya)
   ON CONFLICT (resident_id, worker_id) DO NOTHING;
 
-  -- Wipe previous demo messages in these threads so re-runs aren't cumulative
+  -- Wipe previous demo messages so re-runs aren't cumulative
   DELETE FROM messages
    WHERE conversation_id IN (
      '66666666-6666-6666-6666-000000000001',
@@ -281,16 +280,16 @@ BEGIN
      '66666666-6666-6666-6666-000000000003'
    );
 
-  -- Resident ↔ Samarth K (worker auth = v_worker2_id) — this is the active chat
+  -- Resident ↔ Samarth K — active chat thread
   INSERT INTO messages (conversation_id, sender_id, content, is_read, created_at) VALUES
     ('66666666-6666-6666-6666-000000000001', v_resident_id, 'Hi Samarth, saw your application for the cook role.', true,  now() - interval '3 days'),
-    ('66666666-6666-6666-6666-000000000001', v_worker2_id,  'Hello sir, thank you! When can I start?',           true,  now() - interval '3 days' + interval '5 min'),
-    ('66666666-6666-6666-6666-000000000001', v_resident_id, 'Can you do a trial dinner this Saturday 6pm?',      true,  now() - interval '2 days'),
-    ('66666666-6666-6666-6666-000000000001', v_worker2_id,  'Yes, I will come at 5:45pm to set up.',             true,  now() - interval '2 days' + interval '10 min'),
-    ('66666666-6666-6666-6666-000000000001', v_resident_id, 'Please bring your own knife set if possible.',      false, now() - interval '6 hours'),
-    ('66666666-6666-6666-6666-000000000001', v_worker2_id,  'Sure, I have a full set. Any food allergies?',      false, now() - interval '3 hours');
+    ('66666666-6666-6666-6666-000000000001', v_worker2_id,  'Hello sir, thank you! When can I start?',             true,  now() - interval '3 days' + interval '5 min'),
+    ('66666666-6666-6666-6666-000000000001', v_resident_id, 'Can you do a trial dinner this Saturday 6pm?',        true,  now() - interval '2 days'),
+    ('66666666-6666-6666-6666-000000000001', v_worker2_id,  'Yes, I will come at 5:45pm to set up.',               true,  now() - interval '2 days' + interval '10 min'),
+    ('66666666-6666-6666-6666-000000000001', v_resident_id, 'Please bring your own knife set if possible.',        false, now() - interval '6 hours'),
+    ('66666666-6666-6666-6666-000000000001', v_worker2_id,  'Sure, I have a full set. Any food allergies?',        false, now() - interval '3 hours');
 
-  -- Resident ↔ Lakshmi (existing engagement; resident-only since Lakshmi has no auth)
+  -- Resident ↔ Lakshmi (no auth for Lakshmi, resident-side only)
   INSERT INTO messages (conversation_id, sender_id, content, is_read, created_at) VALUES
     ('66666666-6666-6666-6666-000000000002', v_resident_id, 'Lakshmi, can you come 30 min late tomorrow?', true,  now() - interval '1 day'),
     ('66666666-6666-6666-6666-000000000002', v_resident_id, 'Tomorrow only — Wednesday onwards normal.',   false, now() - interval '1 day' + interval '1 min');

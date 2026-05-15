@@ -1,18 +1,13 @@
 /**
- * ============================================================
- * WORKER PROFILE — Account, bio, rate, payment info
- * Route: /worker-profile
- *
- * Server component reads the workers row linked to the signed-in
- * user (workers.auth_id = auth.uid()). The form itself is a
- * client island so we can update + show toast-style status.
- * ============================================================
+ * /worker-profile — Edit worker bio, rate, payment info, societies.
+ * No logout/delete here — those live on /profile (Account tab).
+ * Saving redirects back to /profile.
  */
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { ChevronLeft } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
 import WorkerProfileForm from './WorkerProfileForm'
-import LogoutButton from '../profile/LogoutButton'
-import DeleteAccountButton from '../profile/DeleteAccountButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +20,7 @@ type WorkerSelf = {
   photo_url: string | null
   upi_id: string | null
   phone: string | null
+  society_id: string | null
 }
 
 export default async function WorkerProfilePage() {
@@ -42,29 +38,37 @@ export default async function WorkerProfilePage() {
 
   const { data: worker } = await supabase
     .from('workers')
-    .select('id, full_name, specialty, bio, daily_rate, photo_url, upi_id, phone')
+    .select('id, full_name, specialty, bio, daily_rate, photo_url, upi_id, phone, society_id')
     .eq('auth_id', user.id)
     .maybeSingle<WorkerSelf>()
 
+  const [{ data: allSocieties }, { data: workerSocietyRows }] = await Promise.all([
+    supabase.from('societies').select('id, name').order('name'),
+    worker
+      ? supabase.from('worker_societies').select('society_id').eq('worker_id', worker.id)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  const currentSocietyIds = (workerSocietyRows ?? []).map((r: { society_id: string }) => r.society_id)
+
   return (
     <main className="min-h-screen bg-neutral-50 pb-24">
-      <header className="bg-white border-b border-neutral-200 px-5 pt-7 pb-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">My Account</h1>
-        <p className="mt-0.5 text-xs text-neutral-500">Helper profile · {user.email}</p>
+      <header className="bg-white border-b border-neutral-200 px-5 pt-7 pb-5 flex items-center gap-3">
+        <Link href="/profile" className="h-8 w-8 rounded-full bg-neutral-100 flex items-center justify-center">
+          <ChevronLeft size={16} className="text-neutral-600" />
+        </Link>
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-neutral-900">Edit Profile</h1>
+          <p className="text-xs text-neutral-500">{user.email}</p>
+        </div>
       </header>
 
       <section className="px-5 mt-5 space-y-5">
-        <WorkerProfileForm worker={worker} />
-
-        <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Session</p>
-          <div className="mt-3 space-y-3">
-            <LogoutButton />
-            <DeleteAccountButton />
-          </div>
-        </div>
-
-        <p className="text-center text-[11px] text-neutral-400">Society Helper · v1.0</p>
+        <WorkerProfileForm
+          worker={worker}
+          allSocieties={allSocieties ?? []}
+          currentSocietyIds={currentSocietyIds}
+        />
       </section>
     </main>
   )

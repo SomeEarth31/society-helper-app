@@ -3,8 +3,8 @@
  * Bottom Navigation — clear active states, notification badge, mobile-first.
  */
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Home, Briefcase, Wallet, User, BadgeIndianRupee, MessageCircle } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { Home, Briefcase, User, MessageCircle, Bell } from 'lucide-react'
 
 type Role = 'resident' | 'worker' | 'admin'
 
@@ -16,20 +16,23 @@ const RESIDENT_TABS = [
 ] as const
 
 const WORKER_TABS = [
-  { href: '/',                label: 'Home',     icon: Home,          badge: false },
-  { href: '/directory',       label: 'Find Jobs', icon: Briefcase,    badge: false },
-  { href: '/hire-requests',   label: 'Requests', icon: MessageCircle, badge: true  },
-  { href: '/profile',         label: 'Account',  icon: User,          badge: false },
+  { href: '/',          label: 'Home',     icon: Home,          badge: false },
+  { href: '/directory', label: 'Find Jobs', icon: Briefcase,    badge: false },
+  { href: '/chat',      label: 'Chat',     icon: MessageCircle, badge: true  },
+  { href: '/profile',   label: 'Account',  icon: User,          badge: false },
 ] as const
 
 export default function BottomNav({
   role = 'resident',
   unreadMessages = 0,
+  pendingHireRequests = 0,
 }: {
   role?: Role
   unreadMessages?: number
+  pendingHireRequests?: number
 }) {
   const pathname = usePathname()
+  const router   = useRouter()
   const tabs = role === 'worker' ? WORKER_TABS : RESIDENT_TABS
   const isWorker = role === 'worker'
 
@@ -37,13 +40,19 @@ export default function BottomNav({
     <nav className="fixed bottom-0 inset-x-0 z-50 bg-white border-t-2 border-slate-200 shadow-[0_-4px_24px_rgba(0,0,0,0.10)] pb-safe">
       <ul className="grid grid-cols-4 h-16 max-w-lg mx-auto">
         {tabs.map(({ href, label, icon: Icon, badge }) => {
-          const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
-          const hasBadge = badge && unreadMessages > 0
+          const active    = href === '/' ? pathname === '/' : pathname.startsWith(href)
+          const badgeCount = badge
+            ? (href === '/hire-requests' ? pendingHireRequests : unreadMessages)
+            : 0
+          const hasBadge = badgeCount > 0
 
           return (
             <li key={href}>
-              <Link href={href} className="relative flex flex-col items-center justify-center h-full gap-0.5">
-
+              <Link
+                href={href}
+                onClick={() => router.refresh()}
+                className="relative flex flex-col items-center justify-center h-full gap-0.5"
+              >
                 {/* Active bar */}
                 {active && (
                   <span className={`absolute top-0 left-1/2 -translate-x-1/2 w-10 h-[3px] rounded-b-full ${
@@ -68,7 +77,7 @@ export default function BottomNav({
                   />
                   {hasBadge && (
                     <span className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center px-1">
-                      {unreadMessages > 9 ? '9+' : unreadMessages}
+                      {badgeCount > 9 ? '9+' : badgeCount}
                     </span>
                   )}
                 </div>

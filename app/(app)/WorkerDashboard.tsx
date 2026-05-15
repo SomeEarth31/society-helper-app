@@ -5,9 +5,10 @@
 import Link from 'next/link'
 import {
   IndianRupee, CalendarCheck, Briefcase,
-  MapPin, TrendingUp, ChevronRight,
+  MapPin, TrendingUp, Bell,
 } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
+import { RateResidentButton } from '@/components/RateButtons'
 
 type WorkerSelf = {
   id: string; full_name: string; specialty: string
@@ -15,7 +16,13 @@ type WorkerSelf = {
 }
 type EngagementRow = {
   id: string; monthly_salary: number; status: string
-  employer: { full_name: string | null; flat_number: string | null } | null
+  employer: {
+    id: string
+    full_name: string | null
+    flat_number: string | null
+    trust_score: number | null
+    resident_reviews: { count: number }[]
+  } | null
 }
 type PaymentRow = { amount: number; status: string; created_at: string }
 type JobRow = {
@@ -41,7 +48,7 @@ export default async function WorkerDashboard({
 
   const { data: engagements } = await supabase
     .from('engagements')
-    .select('id, monthly_salary, status, employer:profiles!engagements_employer_id_fkey ( full_name, flat_number )')
+    .select('id, monthly_salary, status, employer:profiles!engagements_employer_id_fkey ( id, full_name, flat_number, trust_score, resident_reviews(count) )')
     .eq('worker_id', worker?.id ?? '00000000-0000-0000-0000-000000000000')
     .eq('status', 'active')
     .returns<EngagementRow[]>()
@@ -72,20 +79,46 @@ export default async function WorkerDashboard({
       .from('attendance')
       .select('engagement_id, date, status')
       .in('engagement_id', engIds)
-      .gte('date', startIso.slice(0,10))
+      .gte('date', startIso.slice(0, 10))
     attendance = attData ?? []
   }
 
+  // Fetch all societies this worker is in (multi-society support)
   let jobs: JobRow[] = []
-  if (worker?.society_id) {
-    const { data } = await supabase
+  if (worker) {
+    const { data: wSocieties } = await supabase
+      .from('worker_societies')
+      .select('society_id')
+      .eq('worker_id', worker.id)
+
+    const societyIds = (wSocieties ?? []).map(ws => ws.society_id)
+    // Fall back to the legacy workers.society_id if worker_societies is empty
+    if (societyIds.length === 0 && worker.society_id) societyIds.push(worker.society_id)
+
+    // Build query — visible-to-all workers (no societies) get ALL open jobs matching specialty
+    let query = supabase
       .from('job_postings')
       .select('id, specialty, description, offered_salary, created_at, employer:profiles!job_postings_employer_id_fkey ( full_name, flat_number )')
-      .eq('society_id', worker.society_id)
       .eq('status', 'open')
       .order('created_at', { ascending: false })
-      .returns<JobRow[]>()
+
+    if (societyIds.length > 0) {
+      query = query.in('society_id', societyIds)
+    }
+
+    const { data } = await query.returns<JobRow[]>()
     jobs = (data ?? []).filter(j => !worker.specialty || j.specialty === worker.specialty)
+  }
+
+  // Pending hire requests count for badge
+  let pendingHireCount = 0
+  if (worker) {
+    const { count } = await supabase
+      .from('hire_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('worker_id', worker.id)
+      .eq('status', 'pending')
+    pendingHireCount = count ?? 0
   }
 
   const displayName = profile?.full_name ?? worker?.full_name ?? 'Helper'
@@ -129,13 +162,17 @@ export default async function WorkerDashboard({
             <IndianRupee size={26} strokeWidth={2.5} />
             {monthEarnings.toLocaleString('en-IN')}
           </p>
-          {/* Add this inside the main <section> tags in WorkerDashboard.tsx */}
-          <Link 
-            href="/chat" 
-            className="mt-4 w-full h-12 bg-white border border-slate-200 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold text-slate-700 shadow-sm"
+          <Link
+            href="/hire-requests"
+            className="mt-4 w-full h-12 bg-white/20 border border-white/30 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold text-white relative"
           >
-            <MessageCircle size={18} className="text-violet-500" />
-            Open My Messages
+            <Bell size={18} />
+            Hire Requests
+            {pendingHireCount > 0 && (
+              <span className="absolute top-2 right-4 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center px-1">
+                {pendingHireCount > 9 ? '9+' : pendingHireCount}
+              </span>
+            )}
           </Link>
           <div className="mt-4 pt-4 border-t border-white/20 flex items-center gap-5">
             <EChip icon={CalendarCheck} value={engagements?.length ?? 0} label="Homes" />
@@ -163,9 +200,14 @@ export default async function WorkerDashboard({
                       <MapPin size={11} />
                       Flat {e.employer?.flat_number ?? '—'}
                     </p>
-                    {/* ADDED ATTENDANCE VIEW HERE */}
+                    <p className="mt-0.5 text-xs">
+                      {e.employer?.trust_score != null
+                        ? <span className="text-amber-600 font-bold">★ {e.employer.trust_score.toFixed(1)} <span className="text-slate-400 font-normal">({e.employer.resident_reviews?.[0]?.count ?? 0} votes)</span></span>
+                        : <span className="text-slate-400">Unrated resident</span>
+                      }
+                    </p>
                     <p className="mt-1 text-xs font-bold text-emerald-600">
-                      Attendance: {attendance.filter(a => a.engagement_id === e.id && a.status === 'present').length} days present this month
+                      {attendance.filter(a => a.engagement_id === e.id && a.status === 'present').length} days present this month
                     </p>
                   </div>
                   <div className="text-right shrink-0">
@@ -175,33 +217,25 @@ export default async function WorkerDashboard({
                     </p>
                   </div>
                 </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 flex gap-2">
+                  <Link
+                    href="/chat"
+                    className="flex-1 text-center py-2 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold border border-slate-100"
+                  >
+                    Message
+                  </Link>
+                  {worker && e.employer?.id && (
+                    <RateResidentButton
+                      engagementId={e.id}
+                      workerId={worker.id}
+                      residentId={e.employer.id}
+                      trustScore={e.employer.trust_score}
+                      reviewCount={e.employer.resident_reviews?.[0]?.count ?? 0}
+                    />
+                  )}
+                </div>
               </li>
             ))}
-            {/* Inside the engagements map in WorkerDashboard.tsx, at the bottom of the card */}
-            <div className="mt-4 pt-3 border-t border-slate-50 flex gap-2">
-              <Link 
-                href={`/chat`} 
-                className="flex-1 text-center py-2 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold border border-slate-100"
-              >
-                Message
-              </Link>
-              <button 
-                onClick={() => {
-                  const rating = prompt('Rate this resident from 1 to 5:');
-                  if (rating && Number(rating) >= 1 && Number(rating) <= 5) {
-                    supabase.from('resident_reviews').insert({
-                      engagement_id: e.id,
-                      worker_id: worker.id,
-                      resident_id: e.employer?.id, // Ensure you select employer_id in your engagement query
-                      rating: Number(rating)
-                    }).then(() => alert('Rating submitted!'));
-                  } else if (rating) alert('Please enter a number between 1 and 5');
-                }}
-                className="flex-1 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold border border-emerald-100"
-              >
-                Rate Resident
-              </button>
-            </div>
           </ul>
         )}
       </section>

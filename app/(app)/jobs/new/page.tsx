@@ -53,13 +53,11 @@ export default function PostJobPage() {
       status: 'open',
     })
 
-    // After your supabase.from('job_postings').insert() call succeeds:
-    router.push('/'); // Or '/directory', wherever your jobs feed is
-    router.refresh();
-
     setLoading(false)
     if (error) { setError(error.message); return }
-    router.replace('/jobs')
+
+    router.push('/')
+    router.refresh()
   }
 
   return (
