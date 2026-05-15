@@ -8,7 +8,10 @@ import { createServerClient } from '@/lib/supabase/server'
 import AttendanceToggle from '@/components/AttendanceToggle'
 import PaymentButton from '@/components/PaymentButton'
 import { RateWorkerButton } from '@/components/RateButtons'
+import EndEngagementButton from '@/components/EndEngagementButton'
+import InviteWorkersButton from '@/components/InviteWorkersButton'
 import { computeDues } from '@/lib/upi'
+import { getServerTranslations } from '@/lib/i18n/server'
 
 type Worker = {
   id: string; full_name: string; specialty: string
@@ -28,6 +31,7 @@ export default async function ResidentDashboard({
   profile: { full_name: string | null; flat_number: string | null } | null
 }) {
   const supabase = createServerClient()
+  const T = getServerTranslations()
 
   const { data: engagements } = await supabase
     .from('engagements')
@@ -84,7 +88,7 @@ export default async function ResidentDashboard({
             <p className="text-xs font-bold uppercase tracking-widest text-violet-500 mb-1">
               {monthLabel}
             </p>
-            <h1 className="text-2xl font-black text-slate-900">Hi, {firstName} 👋</h1>
+            <h1 className="text-2xl font-black text-slate-900">{T.resident.greeting(firstName)}</h1>
             {profile?.flat_number && (
               <p className="text-xs text-slate-400 mt-0.5">Flat {profile.flat_number}</p>
             )}
@@ -102,16 +106,16 @@ export default async function ResidentDashboard({
       <section className="px-5 mt-5">
         <div className="rounded-3xl bg-gradient-to-br from-violet-700 to-violet-500 p-5 shadow-xl shadow-violet-200">
           <p className="text-violet-200 text-[11px] font-bold uppercase tracking-widest">
-            Dues so far this month
+            {T.resident.duesSoFar}
           </p>
           <p className="text-4xl font-black text-white mt-2 flex items-center gap-1">
             <IndianRupee size={26} strokeWidth={2.5} />
             {totalDues.toLocaleString('en-IN')}
           </p>
           <div className="mt-4 pt-4 border-t border-white/20 flex items-center gap-5">
-            <Chip icon={Users} value={engagements?.length ?? 0} label="Helpers" />
-            <Chip icon={CalendarCheck} value={attendance.length} label="Marks" />
-            <Chip icon={TrendingUp} value={daysInMonth} label="Days/mo" />
+            <Chip icon={Users} value={engagements?.length ?? 0} label={T.resident.helpers} />
+            <Chip icon={CalendarCheck} value={attendance.length} label={T.resident.marks} />
+            <Chip icon={TrendingUp} value={daysInMonth} label={T.resident.daysPerMonth} />
           </div>
         </div>
       </section>
@@ -119,18 +123,25 @@ export default async function ResidentDashboard({
       {/* ── Helpers ── */}
       <section className="px-5 mt-7">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-black text-slate-900">Your Helpers</h2>
-          <Link
-            href="/directory"
-            className="inline-flex items-center gap-1 rounded-2xl bg-violet-50 border border-violet-100 px-3 py-1.5 text-xs font-bold text-violet-600"
-          >
-            <Plus size={12} />
-            Hire
-          </Link>
+          <h2 className="text-lg font-black text-slate-900">{T.resident.yourHelpers}</h2>
+          <div className="flex items-center gap-2">
+            <InviteWorkersButton />
+            <Link
+              href="/directory"
+              className="inline-flex items-center gap-1 rounded-2xl bg-violet-50 border border-violet-100 px-3 py-1.5 text-xs font-bold text-violet-600"
+            >
+              <Plus size={12} />
+              {T.common.hire}
+            </Link>
+          </div>
         </div>
 
         {(!engagements || engagements.length === 0) ? (
-          <EmptyState />
+          <EmptyState
+            title={T.resident.noHelpers}
+            desc={T.resident.noHelpersDesc}
+            cta={T.resident.browseDirectory}
+          />
         ) : (
           <ul className="space-y-3">
             {engagements.map(e => {
@@ -165,7 +176,7 @@ export default async function ResidentDashboard({
                     <div className="flex items-center justify-between mb-3">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                          Today's attendance
+                          {T.resident.todayAttendance}
                         </p>
                         <div className="mt-1.5">
                           <AttendanceToggle
@@ -182,7 +193,7 @@ export default async function ResidentDashboard({
                         <p className="text-base font-black text-slate-900 mt-0.5">
                           ₹{dues.toLocaleString('en-IN')}
                         </p>
-                        <p className="text-[10px] text-slate-400">owed</p>
+                        <p className="text-[10px] text-slate-400">{T.resident.owed}</p>
                       </div>
                     </div>
                     <PaymentButton
@@ -201,6 +212,13 @@ export default async function ResidentDashboard({
                       trustScore={e.worker.trust_score}
                       reviewCount={e.worker.reviews?.[0]?.count ?? 0}
                     />
+                    <div className="flex gap-2 mt-2">
+                      <EndEngagementButton
+                        engagementId={e.id}
+                        role="resident"
+                        otherName={e.worker.full_name}
+                      />
+                    </div>
                   </div>
                 </li>
               )
@@ -237,22 +255,20 @@ function WorkerAvatar({ name, url }: { name: string; url: string | null }) {
   )
 }
 
-function EmptyState() {
+function EmptyState({ title, desc, cta }: { title: string; desc: string; cta: string }) {
   return (
     <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-white p-10 text-center">
       <div className="h-16 w-16 rounded-3xl bg-violet-50 flex items-center justify-center mx-auto mb-4">
         <Users size={28} className="text-violet-300" />
       </div>
-      <p className="font-black text-slate-700 text-base">No helpers yet</p>
-      <p className="text-sm text-slate-400 mt-1 mb-4">
-        Browse the directory to hire your first helper.
-      </p>
+      <p className="font-black text-slate-700 text-base">{title}</p>
+      <p className="text-sm text-slate-400 mt-1 mb-4">{desc}</p>
       <Link
         href="/directory"
         className="inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-200"
       >
         <Plus size={14} />
-        Browse directory
+        {cta}
       </Link>
     </div>
   )

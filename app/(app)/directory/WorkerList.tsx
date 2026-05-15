@@ -1,8 +1,9 @@
 'use client'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { Search, Star, IndianRupee, UserPlus, SlidersHorizontal, Loader2, CheckCircle2, ChevronDown } from 'lucide-react'
+import Link from 'next/link'
+import { Search, Star, IndianRupee, UserPlus, SlidersHorizontal, ChevronDown } from 'lucide-react'
+import { useLanguage } from '@/contexts/LanguageContext'
 import type { WorkerRow } from './page'
 
 const SPECIALTIES = [
@@ -25,12 +26,10 @@ export default function WorkerList({
   residentSocietyId: string | null
   workerSocietyMap: Record<string, string[]>
 }) {
-  const supabase = createClient()
   const router   = useRouter()
+  const { T }    = useLanguage()
   const [q, setQ]                     = useState('')
   const [filter, setFilter]           = useState<Filter>('all')
-  const [hiring, setHiring]           = useState<string | null>(null)
-  const [hired, setHired]             = useState<Set<string>>(new Set())
   const [showOtherSocieties, setShowOtherSocieties] = useState(false)
 
   // Partition workers: "my society" (in-society or visible-to-all) vs "other society"
@@ -60,23 +59,11 @@ export default function WorkerList({
   const filteredMy    = useMemo(() => applySearchFilter(myWorkers),    [myWorkers, q, filter])
   const filteredOther = useMemo(() => applySearchFilter(otherWorkers), [otherWorkers, q, filter])
 
-  async function handleHire(workerId: string) {
-    setHiring(workerId)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setHiring(null); return }
-    await supabase.from('hire_requests').insert({
-      resident_id: user.id, worker_id: workerId, status: 'pending',
-    })
-    setHired(prev => new Set([...prev, workerId]))
-    setHiring(null)
-    router.refresh()
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <div className="relative">
         <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search helpers…"
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder={T.directory.searchHelpers}
           className="w-full rounded-2xl border-2 border-slate-200 bg-white py-3.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-300 shadow-sm focus:border-violet-500 focus:outline-none" />
       </div>
 
@@ -95,20 +82,20 @@ export default function WorkerList({
       </div>
 
       <p className="text-xs font-bold text-slate-400">
-        {filteredMy.length} {filteredMy.length === 1 ? 'helper' : 'helpers'} found
+        {T.directory.helpersFound(filteredMy.length)}
       </p>
 
       {filteredMy.length === 0 && filteredOther.length === 0 ? (
         <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-white p-10 text-center">
           <SlidersHorizontal size={24} className="text-slate-300 mx-auto mb-3" />
-          <p className="font-black text-slate-500">No helpers match</p>
-          <p className="text-xs text-slate-400 mt-1">Try a different search or filter</p>
+          <p className="font-black text-slate-500">{T.directory.noMatch}</p>
+          <p className="text-xs text-slate-400 mt-1">{T.directory.noMatchDesc}</p>
         </div>
       ) : (
         <>
           <ul className="space-y-3">
             {filteredMy.map(w => (
-              <WorkerCard key={w.id} w={w} isHired={hired.has(w.id)} isHiring={hiring === w.id} onHire={handleHire} />
+              <WorkerCard key={w.id} w={w} />
             ))}
           </ul>
 
@@ -120,15 +107,15 @@ export default function WorkerList({
               >
                 <span>
                   {showOtherSocieties
-                    ? `Hide workers from other societies`
-                    : `View ${filteredOther.length} worker${filteredOther.length !== 1 ? 's' : ''} from other societies`}
+                    ? T.directory.hideOtherWorkers
+                    : T.directory.viewOtherWorkers(filteredOther.length)}
                 </span>
                 <ChevronDown size={14} className={`transition-transform ${showOtherSocieties ? 'rotate-180' : ''}`} />
               </button>
               {showOtherSocieties && (
                 <ul className="space-y-3 opacity-80">
                   {filteredOther.map(w => (
-                    <WorkerCard key={w.id} w={w} isHired={hired.has(w.id)} isHiring={hiring === w.id} onHire={handleHire} />
+                    <WorkerCard key={w.id} w={w} />
                   ))}
                 </ul>
               )}
@@ -140,14 +127,8 @@ export default function WorkerList({
   )
 }
 
-function WorkerCard({
-  w, isHired, isHiring, onHire,
-}: {
-  w: WorkerRow
-  isHired: boolean
-  isHiring: boolean
-  onHire: (id: string) => void
-}) {
+function WorkerCard({ w }: { w: WorkerRow }) {
+  const { T } = useLanguage()
   return (
     <li className="rounded-3xl bg-white border border-slate-100 shadow-sm p-4">
       <div className="flex items-center gap-3.5">
@@ -177,17 +158,12 @@ function WorkerCard({
       </div>
 
       <div className="mt-3.5 pt-3.5 border-t border-slate-100">
-        {isHired ? (
-          <div className="flex items-center justify-center gap-2 text-sm font-bold text-emerald-600 h-10">
-            <CheckCircle2 size={16} /> Request sent!
-          </div>
-        ) : (
-          <button onClick={() => onHire(w.id)}
-            disabled={!w.is_available || isHiring}
-            className="w-full h-11 inline-flex items-center justify-center gap-1.5 rounded-2xl bg-violet-600 text-sm font-bold text-white shadow-md shadow-violet-200 active:scale-[0.97] transition disabled:opacity-40">
-            {isHiring ? <Loader2 size={14} className="animate-spin" /> : <><UserPlus size={14} /> Hire</>}
-          </button>
-        )}
+        <Link
+          href={`/directory/${w.id}`}
+          className="w-full h-11 inline-flex items-center justify-center gap-1.5 rounded-2xl bg-violet-600 text-sm font-bold text-white shadow-md shadow-violet-200 active:scale-[0.97] transition"
+        >
+          <UserPlus size={14} /> {T.common.hire}
+        </Link>
       </div>
     </li>
   )

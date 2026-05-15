@@ -10,6 +10,8 @@ import {
 import { createServerClient } from '@/lib/supabase/server'
 import { RateResidentButton } from '@/components/RateButtons'
 import QuickApplyButton from '@/components/QuickApplyButton'
+import EndEngagementButton from '@/components/EndEngagementButton'
+import { getServerTranslations } from '@/lib/i18n/server'
 
 type WorkerSelf = {
   id: string; full_name: string; specialty: string
@@ -40,6 +42,7 @@ export default async function WorkerDashboard({
   profile: { full_name: string | null } | null
 }) {
   const supabase = createServerClient()
+  const T = getServerTranslations()
 
   const { data: worker } = await supabase
     .from('workers')
@@ -136,7 +139,7 @@ export default async function WorkerDashboard({
             <p className="text-xs font-bold uppercase tracking-widest text-emerald-500 mb-1">
               {monthLabel}
             </p>
-            <h1 className="text-2xl font-black text-slate-900">Hi, {firstName} 🙏</h1>
+            <h1 className="text-2xl font-black text-slate-900">{T.worker.greeting(firstName)}</h1>
             {worker?.specialty && (
               <p className="text-xs text-slate-400 mt-0.5 capitalize">
                 {worker.specialty.replace(/_/g, ' ')}
@@ -157,7 +160,7 @@ export default async function WorkerDashboard({
       <section className="px-5 mt-5">
         <div className="rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-500 p-5 shadow-xl shadow-emerald-200">
           <p className="text-emerald-100 text-[11px] font-bold uppercase tracking-widest">
-            Earned this month
+            {T.worker.earnedThisMonth}
           </p>
           <p className="text-4xl font-black text-white mt-2 flex items-center gap-1">
             <IndianRupee size={26} strokeWidth={2.5} />
@@ -168,7 +171,7 @@ export default async function WorkerDashboard({
             className="mt-4 w-full h-12 bg-white/20 border border-white/30 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold text-white relative"
           >
             <Bell size={18} />
-            Hire Requests
+            {T.worker.hireRequests}
             {pendingHireCount > 0 && (
               <span className="absolute top-2 right-4 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center px-1">
                 {pendingHireCount > 9 ? '9+' : pendingHireCount}
@@ -176,8 +179,8 @@ export default async function WorkerDashboard({
             )}
           </Link>
           <div className="mt-4 pt-4 border-t border-white/20 flex items-center gap-5">
-            <EChip icon={CalendarCheck} value={engagements?.length ?? 0} label="Homes" />
-            <EChip icon={Briefcase}     value={jobs.length}               label="Openings" />
+            <EChip icon={CalendarCheck} value={engagements?.length ?? 0} label={T.worker.homes} />
+            <EChip icon={Briefcase}     value={jobs.length}               label={T.worker.openings} />
             <EChip icon={TrendingUp}    value={worker?.daily_rate ?? 0}   label="₹/day" />
           </div>
         </div>
@@ -185,9 +188,9 @@ export default async function WorkerDashboard({
 
       {/* ── Active Engagements ── */}
       <section className="px-5 mt-7">
-        <h2 className="text-lg font-black text-slate-900 mb-4">Active engagements</h2>
+        <h2 className="text-lg font-black text-slate-900 mb-4">{T.worker.activeEngagements}</h2>
         {!engagements?.length ? (
-          <EmptyCard text="No active homes yet. Check the openings below." />
+          <EmptyCard text={T.worker.noEngagements} />
         ) : (
           <ul className="space-y-3">
             {engagements.map(e => (
@@ -208,11 +211,11 @@ export default async function WorkerDashboard({
                       }
                     </p>
                     <p className="mt-1 text-xs font-bold text-emerald-600">
-                      {attendance.filter(a => a.engagement_id === e.id && a.status === 'present').length} days present this month
+                      {T.worker.daysPresent(attendance.filter(a => a.engagement_id === e.id && a.status === 'present').length)}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Monthly</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{T.worker.monthly}</p>
                     <p className="text-lg font-black text-slate-900 mt-0.5">
                       ₹{e.monthly_salary.toLocaleString('en-IN')}
                     </p>
@@ -221,9 +224,9 @@ export default async function WorkerDashboard({
                 <div className="mt-4 pt-3 border-t border-slate-100 flex gap-2">
                   <Link
                     href="/chat"
-                    className="flex-1 text-center py-2 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold border border-slate-100"
+                    className="flex-1 text-center py-2 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold border border-slate-100 flex items-center justify-center"
                   >
-                    Message
+                    {T.common.message}
                   </Link>
                   {worker && e.employer?.id && (
                     <RateResidentButton
@@ -235,6 +238,13 @@ export default async function WorkerDashboard({
                     />
                   )}
                 </div>
+                <div className="flex gap-2 mt-2">
+                  <EndEngagementButton
+                    engagementId={e.id}
+                    role="worker"
+                    otherName={e.employer?.full_name ?? 'Resident'}
+                  />
+                </div>
               </li>
             ))}
           </ul>
@@ -244,17 +254,17 @@ export default async function WorkerDashboard({
       {/* ── Available openings ── */}
       <section className="px-5 mt-7">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-black text-slate-900">Openings near you</h2>
+          <h2 className="text-lg font-black text-slate-900">{T.worker.openingsNearYou}</h2>
           <Link
             href="/directory"
             className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-2xl"
           >
-            See all →
+            {T.common.seeAll}
           </Link>
         </div>
 
         {jobs.length === 0 ? (
-          <EmptyCard text="No matching openings right now. New ones appear instantly." />
+          <EmptyCard text={T.worker.noOpenings} />
         ) : (
           <ul className="space-y-3">
             {jobs.slice(0, 3).map(j => (

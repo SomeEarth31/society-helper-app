@@ -16,7 +16,7 @@ export default async function ChatPage({ params }: { params: { id: string } }) {
   const { data: conv } = await supabase
     .from('conversations')
     .select(`
-      id, resident_id, worker_id, job_application_id,
+      id, resident_id, worker_id, job_application_id, hire_request_id,
       resident:profiles!conversations_resident_id_fkey(id, full_name),
       worker:workers!conversations_worker_id_fkey(id, full_name, specialty, auth_id)
     `)
@@ -43,19 +43,33 @@ export default async function ChatPage({ params }: { params: { id: string } }) {
     .eq('conversation_id', params.id)
     .neq('sender_id', user.id)
 
-  // Fetch application status (to show Accept/Decline in chat if resident)
+  // Fetch application status (resident accepts applicants from chat)
   const applicationId: string | null = (conv as any).job_application_id ?? null
   let applicationStatus: string | null = null
   if (applicationId) {
     const { data: app } = await supabase
       .from('job_applications')
-      .select('status, job_posting_id')
+      .select('status')
       .eq('id', applicationId)
       .single()
     applicationStatus = app?.status ?? null
   }
 
-  // Fetch active engagement between this resident + worker (to show Fire button)
+  // Fetch hire request details (worker accepts from chat)
+  const hireRequestId: string | null = (conv as any).hire_request_id ?? null
+  let hireRequestStatus: string | null = null
+  let hireRequestOfferedSalary: number | null = null
+  if (hireRequestId) {
+    const { data: hr } = await supabase
+      .from('hire_requests')
+      .select('status, offered_salary')
+      .eq('id', hireRequestId)
+      .single()
+    hireRequestStatus       = hr?.status ?? null
+    hireRequestOfferedSalary = hr?.offered_salary ?? null
+  }
+
+  // Fetch active engagement between this resident + worker
   let engagementId: string | null = null
   if ((conv as any).resident_id && (conv as any).worker_id) {
     const { data: eng } = await supabase
@@ -88,6 +102,10 @@ export default async function ChatPage({ params }: { params: { id: string } }) {
       applicationStatus={applicationStatus}
       engagementId={engagementId}
       workerId={(conv.worker as any)?.id ?? null}
+      residentId={(conv as any).resident_id ?? null}
+      hireRequestId={hireRequestId}
+      hireRequestStatus={hireRequestStatus}
+      hireRequestOfferedSalary={hireRequestOfferedSalary}
     />
   )
 }

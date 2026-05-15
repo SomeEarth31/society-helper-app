@@ -35,6 +35,7 @@ export type JobRow = {
     flat_number: string | null
     trust_score: number | null
     resident_reviews: { count: number }[]
+    societies: { name: string } | null
   } | null
   my_application?: { id: string; status: string } | null
 }
@@ -66,7 +67,7 @@ export default async function DirectoryPage() {
       .from('job_postings')
       .select(`
         id, title, specialty, description, schedule, offered_salary, created_at, expires_at, society_id,
-        employer:profiles!job_postings_employer_id_fkey(full_name, flat_number, trust_score, resident_reviews(count))
+        employer:profiles!job_postings_employer_id_fkey(full_name, flat_number, trust_score, resident_reviews(count), societies(name))
       `)
       .eq('status', 'open')
       .order('created_at', { ascending: false })

@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Hindi / Devanagari font support ── */
+:lang(hi), .lang-hi { font-family: var(--font-devanagari), var(--font-inter), sans-serif; }
+
 /* ── Safe area (iPhone notch / home indicator) ── */
 @layer utilities {
   .pb-safe { padding-bottom: env(safe-area-inset-bottom); }

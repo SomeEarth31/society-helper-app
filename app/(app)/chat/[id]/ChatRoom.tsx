@@ -1,12 +1,14 @@
 'use client'
 /**
  * Real-time chat room — Supabase Realtime subscription on messages.
- * Residents can Accept / Decline applicant or Fire an active worker from here.
+ * Residents: Accept / Decline job applicants.
+ * Workers: Accept / Decline hire requests from residents.
  */
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Send, Loader2, CheckCircle2, XCircle, UserMinus } from 'lucide-react'
+import { ArrowLeft, Send, Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 type Message = {
   id: string
@@ -27,6 +29,10 @@ export default function ChatRoom({
   applicationStatus: initialAppStatus,
   engagementId: initialEngagementId,
   workerId,
+  residentId,
+  hireRequestId,
+  hireRequestStatus: initialHireStatus,
+  hireRequestOfferedSalary,
 }: {
   conversationId: string
   currentUserId: string
@@ -38,18 +44,26 @@ export default function ChatRoom({
   applicationStatus: string | null
   engagementId: string | null
   workerId: string | null
+  residentId: string | null
+  hireRequestId: string | null
+  hireRequestStatus: string | null
+  hireRequestOfferedSalary: number | null
 }) {
   const router   = useRouter()
   const supabase = createClient()
+  const { T }    = useLanguage()
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLInputElement>(null)
 
-  const [messages,       setMessages]       = useState<Message[]>(initialMessages)
-  const [text,           setText]           = useState('')
-  const [sending,        setSending]        = useState(false)
-  const [appStatus,      setAppStatus]      = useState(initialAppStatus)
-  const [engagementId,   setEngagementId]   = useState(initialEngagementId)
-  const [actionLoading,  setActionLoading]  = useState<'accept' | 'decline' | 'fire' | null>(null)
+  const [messages,      setMessages]      = useState<Message[]>(initialMessages)
+  const [text,          setText]          = useState('')
+  const [sending,       setSending]       = useState(false)
+  const [appStatus,     setAppStatus]     = useState(initialAppStatus)
+  const [hireStatus,    setHireStatus]    = useState(initialHireStatus)
+  const [actionLoading, setActionLoading] = useState<'accept' | 'decline' | 'accept_hire' | 'decline_hire' | null>(null)
+
+  // Refresh nav badge when chat opens
+  useEffect(() => { router.refresh() }, [])
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -71,7 +85,6 @@ export default function ChatRoom({
           if (prev.find(m => m.id === newMsg.id)) return prev
           return [...prev, newMsg]
         })
-        // Mark as read if from other person
         if (newMsg.sender_id !== currentUserId) {
           supabase.from('messages').update({ is_read: true }).eq('id', newMsg.id)
         }
@@ -97,54 +110,42 @@ export default function ChatRoom({
     router.refresh()
   }
 
+  // ── Resident accepts a job applicant ──
   async function handleAccept() {
     if (!applicationId || !workerId) return
     setActionLoading('accept')
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setActionLoading(null); return }
 
-    // 1. Accept application
     await supabase.from('job_applications')
       .update({ status: 'accepted', resolved_at: new Date().toISOString() })
       .eq('id', applicationId)
 
-    // 2. Fetch job info for salary (via the application)
     const { data: app } = await supabase
-      .from('job_applications')
-      .select('job_posting_id')
-      .eq('id', applicationId)
-      .single()
-
+      .from('job_applications').select('job_posting_id').eq('id', applicationId).single()
     const { data: job } = app?.job_posting_id
-      ? await supabase.from('job_postings')
-          .select('offered_salary, specialty, id')
-          .eq('id', app.job_posting_id)
-          .single()
+      ? await supabase.from('job_postings').select('offered_salary, specialty, id').eq('id', app.job_posting_id).single()
       : { data: null }
 
-    // 3. Create engagement
-    const { data: eng } = await supabase.from('engagements').insert({
+    await supabase.from('engagements').insert({
       employer_id: user.id,
       worker_id: workerId,
       job_application_id: applicationId,
       monthly_salary: job?.offered_salary ?? 0,
       service_type: job?.specialty ?? null,
       status: 'active',
-    }).select('id').single()
+    })
 
-    // 4. Close the job posting so it disappears everywhere
     if (job?.id) {
-      await supabase.from('job_postings')
-        .update({ status: 'closed' })
-        .eq('id', job.id)
+      await supabase.from('job_postings').update({ status: 'closed' }).eq('id', job.id)
     }
 
     setAppStatus('accepted')
-    setEngagementId(eng?.id ?? null)
     setActionLoading(null)
     router.refresh()
   }
 
+  // ── Resident declines a job applicant ──
   async function handleDecline() {
     if (!applicationId) return
     setActionLoading('decline')
@@ -156,20 +157,42 @@ export default function ChatRoom({
     router.refresh()
   }
 
-  async function handleFire() {
-    if (!engagementId) return
-    setActionLoading('fire')
-    await supabase.from('engagements')
-      .update({ status: 'terminated' })
-      .eq('id', engagementId)
-    setEngagementId(null)
+  // ── Worker accepts a hire request ──
+  async function handleAcceptHire() {
+    if (!hireRequestId || !workerId || !residentId) return
+    setActionLoading('accept_hire')
+
+    await supabase.from('hire_requests')
+      .update({ status: 'accepted', resolved_at: new Date().toISOString() })
+      .eq('id', hireRequestId)
+
+    await supabase.from('engagements').insert({
+      employer_id:     residentId,
+      worker_id:       workerId,
+      hire_request_id: hireRequestId,
+      monthly_salary:  hireRequestOfferedSalary ?? 0,
+      status:          'active',
+    })
+
+    setHireStatus('accepted')
+    setActionLoading(null)
+    router.refresh()
+  }
+
+  // ── Worker declines a hire request ──
+  async function handleDeclineHire() {
+    if (!hireRequestId) return
+    setActionLoading('decline_hire')
+    await supabase.from('hire_requests')
+      .update({ status: 'declined', resolved_at: new Date().toISOString() })
+      .eq('id', hireRequestId)
+    setHireStatus('declined')
     setActionLoading(null)
     router.refresh()
   }
 
   const initials = otherName.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase()
 
-  // Group messages by date
   function formatDate(iso: string) {
     const d = new Date(iso)
     const today = new Date()
@@ -184,7 +207,6 @@ export default function ChatRoom({
     return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
   }
 
-  // Group by date
   const grouped: { date: string; msgs: Message[] }[] = []
   messages.forEach(m => {
     const dateLabel = formatDate(m.created_at)
@@ -193,9 +215,10 @@ export default function ChatRoom({
     else grouped.push({ date: dateLabel, msgs: [m] })
   })
 
-  // Resident action bar (shown only for residents)
+  // Resident: show accept/decline for pending applicants
   const showAcceptDecline = isResident && applicationId && appStatus === 'pending'
-  const showFire          = isResident && !!engagementId
+  // Worker: show accept/decline for pending hire requests
+  const showHireActions   = !isResident && hireRequestId && hireStatus === 'pending'
 
   return (
     <div className="flex flex-col h-screen pb-20 bg-slate-50">
@@ -215,50 +238,70 @@ export default function ChatRoom({
           <p className="font-bold text-slate-900 text-[15px] leading-tight">{otherName}</p>
           <p className="text-[11px] text-slate-400 capitalize">{otherRole}</p>
         </div>
-        {/* Hired badge */}
+        {/* Status badges */}
         {appStatus === 'accepted' && (
           <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1 rounded-full shrink-0">
-            Hired
+            {T.chat.hired}
+          </span>
+        )}
+        {hireStatus === 'accepted' && (
+          <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1 rounded-full shrink-0">
+            {T.chat.hired}
           </span>
         )}
       </header>
 
-      {/* Resident action bar */}
-      {(showAcceptDecline || showFire) && (
+      {/* Resident action bar — accept/decline applicant */}
+      {showAcceptDecline && (
         <div className="bg-white border-b border-slate-100 px-4 py-3 flex gap-2 shrink-0">
-          {showAcceptDecline && (
-            <>
-              <button
-                onClick={handleDecline}
-                disabled={!!actionLoading}
-                className="flex-1 h-10 rounded-2xl border-2 border-slate-200 text-slate-600 text-sm font-bold flex items-center justify-center gap-1.5 active:scale-95 transition disabled:opacity-40"
-              >
-                {actionLoading === 'decline'
-                  ? <Loader2 size={14} className="animate-spin" />
-                  : <><XCircle size={14} /> Decline</>}
-              </button>
-              <button
-                onClick={handleAccept}
-                disabled={!!actionLoading}
-                className="flex-1 h-10 rounded-2xl bg-emerald-500 text-white text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition disabled:opacity-40"
-              >
-                {actionLoading === 'accept'
-                  ? <Loader2 size={14} className="animate-spin" />
-                  : <><CheckCircle2 size={14} /> Accept & Hire</>}
-              </button>
-            </>
-          )}
-          {showFire && (
+          <button
+            onClick={handleDecline}
+            disabled={!!actionLoading}
+            className="flex-1 h-10 rounded-2xl border-2 border-slate-200 text-slate-600 text-sm font-bold flex items-center justify-center gap-1.5 active:scale-95 transition disabled:opacity-40"
+          >
+            {actionLoading === 'decline'
+              ? <Loader2 size={14} className="animate-spin" />
+              : <><XCircle size={14} /> {T.chat.declineHire}</>}
+          </button>
+          <button
+            onClick={handleAccept}
+            disabled={!!actionLoading}
+            className="flex-1 h-10 rounded-2xl bg-emerald-500 text-white text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition disabled:opacity-40"
+          >
+            {actionLoading === 'accept'
+              ? <Loader2 size={14} className="animate-spin" />
+              : <><CheckCircle2 size={14} /> {T.chat.acceptApplicant}</>}
+          </button>
+        </div>
+      )}
+
+      {/* Worker action bar — accept/decline hire request */}
+      {showHireActions && (
+        <div className="bg-amber-50 border-b border-amber-100 px-4 py-3 shrink-0">
+          <p className="text-xs font-bold text-amber-700 mb-2">
+            This resident wants to hire you
+            {hireRequestOfferedSalary ? ` · ₹${hireRequestOfferedSalary.toLocaleString('en-IN')}/mo offered` : ''}
+          </p>
+          <div className="flex gap-2">
             <button
-              onClick={handleFire}
+              onClick={handleDeclineHire}
               disabled={!!actionLoading}
-              className="flex-1 h-10 rounded-2xl border-2 border-red-200 text-red-600 text-sm font-bold flex items-center justify-center gap-1.5 active:scale-95 transition disabled:opacity-40"
+              className="flex-1 h-10 rounded-2xl border-2 border-slate-200 text-slate-600 text-sm font-bold flex items-center justify-center gap-1.5 active:scale-95 transition disabled:opacity-40 bg-white"
             >
-              {actionLoading === 'fire'
+              {actionLoading === 'decline_hire'
                 ? <Loader2 size={14} className="animate-spin" />
-                : <><UserMinus size={14} /> End Engagement</>}
+                : <><XCircle size={14} /> {T.chat.declineHire}</>}
             </button>
-          )}
+            <button
+              onClick={handleAcceptHire}
+              disabled={!!actionLoading}
+              className="flex-1 h-10 rounded-2xl bg-emerald-500 text-white text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition disabled:opacity-40"
+            >
+              {actionLoading === 'accept_hire'
+                ? <Loader2 size={14} className="animate-spin" />
+                : <><CheckCircle2 size={14} /> {T.chat.acceptHire}</>}
+            </button>
+          </div>
         </div>
       )}
 
@@ -267,7 +310,7 @@ export default function ChatRoom({
         {grouped.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <p className="text-sm text-slate-400 text-center">
-              Send a message to start the conversation with {otherName}
+              {T.chat.startConversation(otherName)}
             </p>
           </div>
         )}
@@ -318,6 +361,7 @@ export default function ChatRoom({
           onChange={e => setText(e.target.value)}
           placeholder="Type a message…"
           className="flex-1 rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-3 text-[15px] text-slate-900 placeholder:text-slate-300 outline-none focus:border-violet-500 focus:bg-white transition"
+          placeholder={T.chat.typePlaceholder}
         />
         <button type="submit" disabled={!text.trim() || sending}
           className="h-12 w-12 rounded-2xl bg-violet-600 flex items-center justify-center text-white shadow-md shadow-violet-200 active:scale-95 transition disabled:opacity-40 shrink-0">

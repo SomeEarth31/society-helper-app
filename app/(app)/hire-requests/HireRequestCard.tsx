@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { CheckCircle2, XCircle, Loader2, IndianRupee, MessageCircle, Home } from 'lucide-react'
+import { XCircle, Loader2, IndianRupee, MessageCircle, Home } from 'lucide-react'
 import type { HireRequest } from './page'
 
 export default function HireRequestCard({
@@ -14,42 +14,28 @@ export default function HireRequestCard({
 }) {
   const router   = useRouter()
   const supabase = createClient()
-  const [loading, setLoading] = useState<'accept' | 'decline' | null>(null)
+  const [loading, setLoading] = useState<'chat' | 'decline' | null>(null)
 
   const initials = (request.resident?.full_name ?? 'R')
     .split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase()
 
-  async function handleAccept() {
-    setLoading('accept')
+  async function handleChat() {
+    setLoading('chat')
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(null); return }
 
-    // Update request status
-    await supabase.from('hire_requests')
-      .update({ status: 'accepted', resolved_at: new Date().toISOString() })
-      .eq('id', request.id)
-
-    // Create engagement
-    await supabase.from('engagements').insert({
-      employer_id: request.resident!.id,
-      worker_id: workerId,
-      hire_request_id: request.id,
-      monthly_salary: request.offered_salary ?? 0,
-      status: 'active',
-    })
-
-    // Open / get conversation
+    // Open or create conversation linked to this hire request
     const { data: conv } = await supabase.from('conversations')
       .upsert({
-        resident_id: request.resident!.id,
-        worker_id: workerId,
+        resident_id:     request.resident!.id,
+        worker_id:       workerId,
         hire_request_id: request.id,
       }, { onConflict: 'resident_id,worker_id' })
       .select().single()
 
     setLoading(null)
     if (conv) router.push(`/chat/${conv.id}`)
-    else router.push('/')
+    else router.push('/chat')
   }
 
   async function handleDecline() {
@@ -109,9 +95,9 @@ export default function HireRequestCard({
             className="flex-1 h-11 rounded-2xl border-2 border-slate-200 text-slate-600 text-sm font-bold flex items-center justify-center gap-1.5 active:scale-95 transition disabled:opacity-40">
             {loading === 'decline' ? <Loader2 size={15} className="animate-spin" /> : <><XCircle size={15} /> Decline</>}
           </button>
-          <button onClick={handleAccept} disabled={!!loading}
-            className="flex-1 h-11 rounded-2xl bg-emerald-500 text-white text-sm font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-100 active:scale-95 transition disabled:opacity-40">
-            {loading === 'accept' ? <Loader2 size={15} className="animate-spin" /> : <><MessageCircle size={15} /> Accept & Chat</>}
+          <button onClick={handleChat} disabled={!!loading}
+            className="flex-1 h-11 rounded-2xl bg-violet-600 text-white text-sm font-bold flex items-center justify-center gap-1.5 shadow-md shadow-violet-100 active:scale-95 transition disabled:opacity-40">
+            {loading === 'chat' ? <Loader2 size={15} className="animate-spin" /> : <><MessageCircle size={15} /> Chat</>}
           </button>
         </div>
       )}

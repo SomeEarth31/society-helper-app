@@ -35,6 +35,12 @@ export default async function JobsPage() {
     .from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role === 'worker') redirect('/directory')
 
+  // Mark job_application notifications as read (clears the Jobs nav badge)
+  await supabase.from('notifications')
+    .update({ is_read: true })
+    .eq('user_id', user.id)
+    .eq('type', 'job_application')
+
   // Fetch resident's job postings with application counts
   const { data: jobs } = await supabase
     .from('job_postings')
