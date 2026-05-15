@@ -1,26 +1,13 @@
 'use client'
 /**
- * WorkerProfileForm — edits the signed-in worker's directory listing.
- * Updates: full_name, specialty, bio, daily_rate, photo_url, upi_id.
- *
- * Relies on the RLS policy `workers_self_update` (auth_id = auth.uid()).
+ * WorkerProfileForm — edits the signed-in worker's extended details.
+ * Updates: bio, photo_url, upi_id.
+ * Leaves name, specialty, and rate untouched from initial onboarding.
  */
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Check, Loader2, IndianRupee, Image as ImageIcon, Wallet } from 'lucide-react'
-
-type Specialty = 'cook' | 'cleaner' | 'car_washer' | 'caretaker' | 'gardener' | 'maid' | 'other'
-
-const SPECIALTIES: { key: Specialty; label: string }[] = [
-  { key: 'maid',       label: 'Maid' },
-  { key: 'cook',       label: 'Cook' },
-  { key: 'cleaner',    label: 'Cleaner' },
-  { key: 'car_washer', label: 'Car washer' },
-  { key: 'caretaker',  label: 'Caretaker' },
-  { key: 'gardener',   label: 'Gardener' },
-  { key: 'other',      label: 'Other' },
-]
+import { Check, Loader2, Image as ImageIcon, Wallet } from 'lucide-react'
 
 type WorkerSelf = {
   id: string
@@ -37,10 +24,8 @@ export default function WorkerProfileForm({ worker }: { worker: WorkerSelf | nul
   const router = useRouter()
   const supabase = createClient()
 
-  const [fullName, setFullName] = useState(worker?.full_name ?? '')
-  const [specialty, setSpecialty] = useState<Specialty>((worker?.specialty as Specialty) ?? 'maid')
+  // Only keep state for the new information
   const [bio, setBio]           = useState(worker?.bio ?? '')
-  const [dailyRate, setRate]    = useState(worker?.daily_rate?.toString() ?? '')
   const [photoUrl, setPhoto]    = useState(worker?.photo_url ?? '')
   const [upiId, setUpi]         = useState(worker?.upi_id ?? '')
 
@@ -57,13 +42,12 @@ export default function WorkerProfileForm({ worker }: { worker: WorkerSelf | nul
       setSaving(false); return
     }
 
+    // Only update the extended fields. 
+    // Supabase will implicitly retain the name, rate, and specialty.
     const { error } = await supabase
       .from('workers')
       .update({
-        full_name: fullName,
-        specialty,
         bio: bio || null,
-        daily_rate: dailyRate ? parseFloat(dailyRate) : null,
         photo_url: photoUrl || null,
         upi_id: upiId || null,
       })
@@ -71,42 +55,27 @@ export default function WorkerProfileForm({ worker }: { worker: WorkerSelf | nul
 
     setSaving(false)
     if (error) { setErr(error.message); return }
+    
     setOk(true)
+    
+    // Redirect to the dashboard once they finish setting up their profile
+    router.push('/')
     router.refresh()
-    setTimeout(() => setOk(false), 2200)
   }
 
   return (
     <form onSubmit={handleSave} className="space-y-5">
-      {/* Public profile */}
+      {/* Public profile additions */}
       <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm space-y-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Public profile</p>
-
-        <Field label="Display name">
-          <input className={inputCls} required
-            value={fullName} onChange={e => setFullName(e.target.value)} />
-        </Field>
-
-        <Field label="Specialty">
-          <select className={inputCls}
-            value={specialty} onChange={e => setSpecialty(e.target.value as Specialty)}>
-            {SPECIALTIES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
-        </Field>
+        <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Public profile details</p>
+        <p className="text-xs text-neutral-500 -mt-2">
+          Add a bio and photo to help residents get to know you better.
+        </p>
 
         <Field label="About me">
           <textarea className={`${inputCls} min-h-[88px] resize-y`}
             value={bio} onChange={e => setBio(e.target.value)}
             placeholder="Brief intro residents will see in the directory." />
-        </Field>
-
-        <Field label="Daily rate (₹)">
-          <div className="relative">
-            <IndianRupee size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-            <input className={`${inputCls} pl-8`} inputMode="numeric"
-              value={dailyRate} onChange={e => setRate(e.target.value.replace(/[^\d.]/g, ''))}
-              placeholder="500" />
-          </div>
         </Field>
 
         <Field label="Photo URL">
@@ -140,7 +109,7 @@ export default function WorkerProfileForm({ worker }: { worker: WorkerSelf | nul
         <button type="submit" disabled={saving}
           className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition active:scale-[0.99] hover:bg-indigo-700 disabled:opacity-60">
           {saving && <Loader2 size={14} className="animate-spin" />}
-          {saving ? 'Saving…' : 'Save changes'}
+          {saving ? 'Saving…' : 'Finish Profile'}
         </button>
         {ok && (
           <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
