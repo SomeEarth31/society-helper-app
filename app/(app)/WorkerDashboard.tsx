@@ -65,6 +65,17 @@ export default async function WorkerDashboard({
       .reduce((sum, p) => sum + (p.amount ?? 0), 0)
   }
 
+  // Fetch attendance for the worker's active engagements
+  let attendance: { engagement_id: string; date: string; status: string }[] = []
+  if (engIds.length) {
+    const { data: attData } = await supabase
+      .from('attendance')
+      .select('engagement_id, date, status')
+      .in('engagement_id', engIds)
+      .gte('date', startIso.slice(0,10))
+    attendance = attData ?? []
+  }
+
   let jobs: JobRow[] = []
   if (worker?.society_id) {
     const { data } = await supabase
@@ -118,6 +129,14 @@ export default async function WorkerDashboard({
             <IndianRupee size={26} strokeWidth={2.5} />
             {monthEarnings.toLocaleString('en-IN')}
           </p>
+          {/* Add this inside the main <section> tags in WorkerDashboard.tsx */}
+          <Link 
+            href="/chat" 
+            className="mt-4 w-full h-12 bg-white border border-slate-200 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold text-slate-700 shadow-sm"
+          >
+            <MessageCircle size={18} className="text-violet-500" />
+            Open My Messages
+          </Link>
           <div className="mt-4 pt-4 border-t border-white/20 flex items-center gap-5">
             <EChip icon={CalendarCheck} value={engagements?.length ?? 0} label="Homes" />
             <EChip icon={Briefcase}     value={jobs.length}               label="Openings" />
@@ -144,6 +163,10 @@ export default async function WorkerDashboard({
                       <MapPin size={11} />
                       Flat {e.employer?.flat_number ?? '—'}
                     </p>
+                    {/* ADDED ATTENDANCE VIEW HERE */}
+                    <p className="mt-1 text-xs font-bold text-emerald-600">
+                      Attendance: {attendance.filter(a => a.engagement_id === e.id && a.status === 'present').length} days present this month
+                    </p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Monthly</p>
@@ -154,6 +177,31 @@ export default async function WorkerDashboard({
                 </div>
               </li>
             ))}
+            {/* Inside the engagements map in WorkerDashboard.tsx, at the bottom of the card */}
+            <div className="mt-4 pt-3 border-t border-slate-50 flex gap-2">
+              <Link 
+                href={`/chat`} 
+                className="flex-1 text-center py-2 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold border border-slate-100"
+              >
+                Message
+              </Link>
+              <button 
+                onClick={() => {
+                  const rating = prompt('Rate this resident from 1 to 5:');
+                  if (rating && Number(rating) >= 1 && Number(rating) <= 5) {
+                    supabase.from('resident_reviews').insert({
+                      engagement_id: e.id,
+                      worker_id: worker.id,
+                      resident_id: e.employer?.id, // Ensure you select employer_id in your engagement query
+                      rating: Number(rating)
+                    }).then(() => alert('Rating submitted!'));
+                  } else if (rating) alert('Please enter a number between 1 and 5');
+                }}
+                className="flex-1 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold border border-emerald-100"
+              >
+                Rate Resident
+              </button>
+            </div>
           </ul>
         )}
       </section>

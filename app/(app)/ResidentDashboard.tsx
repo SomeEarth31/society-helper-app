@@ -143,8 +143,9 @@ export default async function ResidentDashboard({
                       <p className="font-bold text-slate-900 truncate text-[15px]">
                         {e.worker.full_name}
                       </p>
+                      {/* Replace the existing specialty <p> tag with this to show the hired position */}
                       <p className="text-xs text-slate-400 mt-0.5 capitalize">
-                        {e.worker.specialty.replace(/_/g, ' ')}
+                        {e.service_type ? e.service_type : e.worker.specialty.replace(/_/g, ' ')}
                         <span className="ml-2 text-amber-500 font-semibold">
                           ★ {e.worker.trust_score.toFixed(1)}
                         </span>
@@ -190,6 +191,26 @@ export default async function ResidentDashboard({
                 </li>
               )
             })}
+            {/* Next to <PaymentButton /> in ResidentDashboard.tsx */}
+            <button 
+              onClick={() => {
+                const rating = prompt(`Rate ${e.worker.full_name} from 1 to 5:`);
+                if (rating && Number(rating) >= 1 && Number(rating) <= 5) {
+                  supabase.from('reviews').insert({
+                    engagement_id: e.id,
+                    worker_id: e.worker.id,
+                    reviewer_id: userId,
+                    rating: Number(rating)
+                  }).then(() => {
+                    alert('Rating submitted!');
+                    // Ideally router.refresh() here so the trust_score updates
+                  });
+                }
+              }}
+              className="w-full mt-2 py-2 bg-violet-50 text-violet-700 rounded-xl text-xs font-bold border border-violet-100"
+            >
+              Rate {e.worker.full_name.split(' ')[0]}
+            </button>
           </ul>
         )}
       </section>

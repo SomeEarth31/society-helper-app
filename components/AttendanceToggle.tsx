@@ -6,6 +6,7 @@
 import { useOptimistic, useTransition } from 'react'
 import { Check, X, RotateCcw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 
 type Status = 'present' | 'absent' | null
 
@@ -14,6 +15,7 @@ export default function AttendanceToggle({
 }: { engagementId: string; date: string; initial: Status }) {
   const [pending, start] = useTransition()
   const [optimistic, setOptimistic] = useOptimistic<Status>(initial)
+  const router = useRouter()
 
   const mark = (next: Status) => {
     setOptimistic(next)
@@ -27,6 +29,7 @@ export default function AttendanceToggle({
           { engagement_id: engagementId, date, status: next },
           { onConflict: 'engagement_id,date' },
         )
+        router.refresh();
       }
     })
   }

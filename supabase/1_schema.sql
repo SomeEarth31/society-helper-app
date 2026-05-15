@@ -44,6 +44,7 @@ create table profiles (
   society_id  uuid references societies(id),
   role        user_role default 'resident',
   upi_id      text,
+  trust_score numeric(3,2) default 3.0 check (trust_score between 0 and 5), -- ADD THIS LINE
   created_at  timestamptz default now()
 );
 
@@ -230,6 +231,28 @@ create table reviews (
   unique (engagement_id, reviewer_id)
 );
 create index idx_review_worker on reviews(worker_id);
+
+create table resident_reviews (
+  id            uuid primary key default uuid_generate_v4(),
+  engagement_id uuid not null references engagements(id) on delete cascade,
+  worker_id     uuid not null references workers(id) on delete cascade,
+  resident_id   uuid not null references profiles(id) on delete cascade,
+  rating        int not null check (rating between 1 and 5),
+  comment       text,
+  created_at    timestamptz default now(),
+  unique (engagement_id, worker_id)
+);
+create index idx_resident_review on resident_reviews(resident_id);
+
+alter table resident_reviews enable row level security;
+
+create policy "resident_reviews_read" on resident_reviews
+  for select using (auth.uid() is not null);
+
+create policy "resident_reviews_worker_insert" on resident_reviews
+  for insert with check (
+    worker_id in (select id from workers where auth_id = auth.uid())
+  );
 
 -- ============================================================
 -- HELPER VIEW: current-month dues
@@ -565,6 +588,23 @@ create trigger on_review_insert
   after insert on reviews
   for each row execute procedure public.update_worker_trust_score();
 
+create or replace function public.update_resident_trust_score()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  update profiles
+  set trust_score = (
+    select round(avg(rating)::numeric, 2)
+    from resident_reviews where resident_id = new.resident_id
+  )
+  where id = new.resident_id;
+  return new;
+end;
+$$;
+
+create trigger on_resident_review_insert
+  after insert on resident_reviews
+  for each row execute procedure public.update_resident_trust_score();
+
 -- ============================================================
 -- NOTIFICATION TRIGGERS
 -- ============================================================
@@ -712,3 +752,6 @@ $$;
 create trigger on_new_message_notify
   after insert on messages
   for each row execute procedure public.notify_new_message();
+
+-- Enable real-time for chat messages
+alter publication supabase_realtime add table messages;

@@ -41,15 +41,21 @@ export default function JobBoard({
   async function handleApply(jobId: string) {
     if (!workerId) return
     setApplying(jobId)
-    const { data } = await supabase.from('job_applications').insert({
+    
+    // Changed from .insert() to .upsert() to handle re-applying
+    const { data } = await supabase.from('job_applications').upsert({
       job_posting_id: jobId,
       worker_id: workerId,
-    }).select().single()
+      status: 'pending',
+      resolved_at: null 
+    }, { onConflict: 'job_posting_id,worker_id' }).select().single()
+    
     setApplying(null)
     if (data) {
       setLocalJobs(prev => prev.map(j =>
         j.id === jobId ? { ...j, my_application: { id: data.id, status: 'pending' } } : j
       ))
+      router.refresh() // Auto-refresh the page state
     }
   }
 
@@ -62,6 +68,9 @@ export default function JobBoard({
     setLocalJobs(prev => prev.map(j =>
       j.id === jobId ? { ...j, my_application: null } : j
     ))
+
+    // ADD THIS LINE
+    router.refresh()
   }
 
   if (localJobs.length === 0) {
