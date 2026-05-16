@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react'
+import LangToggle from '@/components/LangToggle'
 
 type Step = 'email' | 'password' | 'otp' | 'signup' | 'signup-otp'
 
@@ -98,7 +99,12 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col bg-slate-900">
 
       {/* ── Dark hero ── */}
-      <div className="flex-none px-6 pt-14 pb-20">
+      <div className="flex-none px-6 pt-14 pb-20 relative">
+        {/* Language toggle */}
+        <div className="absolute top-5 right-5">
+          <LangToggle />
+        </div>
+
         {step !== 'email' && (
           <button onClick={handleBack}
             className="mb-8 flex items-center gap-2 text-slate-400 text-sm min-h-[44px]">

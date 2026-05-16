@@ -17,7 +17,7 @@
  *   4. Callback exchanges code → session with type=recovery
  *   5. User enters new password → updateUser({ password })
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff, ShieldCheck, Mail } from 'lucide-react'
@@ -25,6 +25,14 @@ import { ArrowLeft, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff, ShieldCheck
 type Step = 'request' | 'sent' | 'reset' | 'done'
 
 export default function ChangePasswordPage() {
+  return (
+    <Suspense>
+      <ChangePasswordForm />
+    </Suspense>
+  )
+}
+
+function ChangePasswordForm() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const fromOtp      = searchParams.get('from') === 'otp'

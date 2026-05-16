@@ -33,6 +33,7 @@ export default function ChatRoom({
   hireRequestId,
   hireRequestStatus: initialHireStatus,
   hireRequestOfferedSalary,
+  hireRequestSpecialty,
 }: {
   conversationId: string
   currentUserId: string
@@ -48,6 +49,7 @@ export default function ChatRoom({
   hireRequestId: string | null
   hireRequestStatus: string | null
   hireRequestOfferedSalary: number | null
+  hireRequestSpecialty: string | null
 }) {
   const router   = useRouter()
   const supabase = createClient()
@@ -86,7 +88,9 @@ export default function ChatRoom({
           return [...prev, newMsg]
         })
         if (newMsg.sender_id !== currentUserId) {
+          // Mark as read immediately and refresh badge
           supabase.from('messages').update({ is_read: true }).eq('id', newMsg.id)
+            .then(() => router.refresh())
         }
       })
       .subscribe()
@@ -137,7 +141,7 @@ export default function ChatRoom({
     })
 
     if (job?.id) {
-      await supabase.from('job_postings').update({ status: 'closed' }).eq('id', job.id)
+      await supabase.from('job_postings').update({ status: 'filled' }).eq('id', job.id)
     }
 
     setAppStatus('accepted')
@@ -171,8 +175,24 @@ export default function ChatRoom({
       worker_id:       workerId,
       hire_request_id: hireRequestId,
       monthly_salary:  hireRequestOfferedSalary ?? 0,
+      service_type:    hireRequestSpecialty ?? null,
       status:          'active',
     })
+
+    // Close any matching open job posting from this resident for this specialty
+    if (hireRequestSpecialty) {
+      const { data: matchingJobs } = await supabase
+        .from('job_postings')
+        .select('id')
+        .eq('employer_id', residentId)
+        .eq('specialty', hireRequestSpecialty)
+        .eq('status', 'open')
+      if (matchingJobs?.length) {
+        await supabase.from('job_postings')
+          .update({ status: 'filled' })
+          .in('id', matchingJobs.map(j => j.id))
+      }
+    }
 
     setHireStatus('accepted')
     setActionLoading(null)
@@ -359,9 +379,8 @@ export default function ChatRoom({
           ref={inputRef}
           value={text}
           onChange={e => setText(e.target.value)}
-          placeholder="Type a message…"
-          className="flex-1 rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-3 text-[15px] text-slate-900 placeholder:text-slate-300 outline-none focus:border-violet-500 focus:bg-white transition"
           placeholder={T.chat.typePlaceholder}
+          className="flex-1 rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-3 text-[15px] text-slate-900 placeholder:text-slate-300 outline-none focus:border-violet-500 focus:bg-white transition"
         />
         <button type="submit" disabled={!text.trim() || sending}
           className="h-12 w-12 rounded-2xl bg-violet-600 flex items-center justify-center text-white shadow-md shadow-violet-200 active:scale-95 transition disabled:opacity-40 shrink-0">

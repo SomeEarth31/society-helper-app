@@ -272,7 +272,7 @@ export default function OnboardingForm({
             </div>
 
             {/* Rate */}
-            <InputField label="Daily rate (₹)" type="numeric" value={dailyRate}
+            <InputField label="Daily rate (₹)" type="number" value={dailyRate}
               onChange={v => setDailyRate(v.replace(/\D/g, ''))} placeholder="500" />
 
             {/* Bio */}
@@ -525,7 +525,7 @@ function InputField({ label, type = 'text', value, onChange, placeholder }: {
 
 function RoleTile({ active, onClick, icon: Icon, label, hint }: {
   active: boolean; onClick: () => void
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: React.ElementType
   label: string; hint: string
 }) {
   return (

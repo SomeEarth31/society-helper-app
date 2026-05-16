@@ -11,7 +11,7 @@ export default function LangToggle() {
 
   return (
     <button
-      onClick={() => setLang(isHindi ? 'en' : 'hi')}
+      onClick={() => { setLang(isHindi ? 'en' : 'hi'); setTimeout(() => window.location.reload(), 50) }}
       className="h-8 px-3 rounded-full border-2 border-slate-200 bg-white text-xs font-black text-slate-600 flex items-center gap-1.5 shadow-sm active:scale-95 transition select-none"
       aria-label="Toggle language"
     >

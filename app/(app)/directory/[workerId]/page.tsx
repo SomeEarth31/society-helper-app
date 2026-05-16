@@ -105,6 +105,7 @@ export default async function WorkerDetailPage({
         <HireForm
           workerId={worker.id}
           workerName={worker.full_name}
+          workerSpecialty={worker.specialty}
           isAvailable={worker.is_available}
           existingRequestId={existing?.id ?? null}
         />

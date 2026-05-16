@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import { Plus, Users, Clock, CheckCircle2, XCircle, Briefcase } from 'lucide-react'
+import DeleteJobButton from '@/components/DeleteJobButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -151,12 +152,15 @@ function JobCard({ job, muted = false }: { job: any; muted?: boolean }) {
             <span className="text-[11px] text-slate-400">Expires {expiresDate}</span>
           )}
         </div>
-        {appCount > 0 && (
-          <Link href={`/jobs/${job.id}/applicants`}
-            className="text-xs font-bold text-violet-600 bg-violet-50 px-3 py-2 rounded-xl active:scale-95 transition">
-            View applicants →
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {appCount > 0 && (
+            <Link href={`/jobs/${job.id}/applicants`}
+              className="text-xs font-bold text-violet-600 bg-violet-50 px-3 py-2 rounded-xl active:scale-95 transition">
+              View applicants →
+            </Link>
+          )}
+          {job.status === 'open' && <DeleteJobButton jobId={job.id} />}
+        </div>
       </div>
     </li>
   )

@@ -165,7 +165,7 @@ export default async function ProfilePage() {
 }
 
 function DetailRow({ icon: Icon, label, value, last = false }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: React.ElementType
   label: string; value: string; last?: boolean
 }) {
   return (

@@ -58,15 +58,15 @@ export default function EndEngagementButton({
 
       {/* Confirmation modal */}
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/40"
             onClick={() => !loading && setOpen(false)}
           />
 
-          {/* Sheet */}
-          <div className="relative w-full max-w-lg bg-white rounded-t-3xl px-5 pt-5 pb-10 shadow-2xl">
+          {/* Modal */}
+          <div className="relative w-full max-w-sm bg-white rounded-3xl px-5 pt-5 pb-6 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="h-11 w-11 rounded-2xl bg-red-50 flex items-center justify-center shrink-0">
                 <AlertTriangle size={20} className="text-red-500" />

@@ -132,7 +132,7 @@ export default function PostJobPage() {
         {/* Salary */}
         <div>
           <SLabel>Offered monthly salary (₹) <span className="text-slate-300 font-normal normal-case tracking-normal">(optional)</span></SLabel>
-          <input type="numeric" value={salary}
+          <input type="number" inputMode="numeric" value={salary}
             onChange={e => setSalary(e.target.value.replace(/\D/g, ''))}
             placeholder="8000"
             className={inputCls} />

@@ -59,14 +59,16 @@ export default async function ChatPage({ params }: { params: { id: string } }) {
   const hireRequestId: string | null = (conv as any).hire_request_id ?? null
   let hireRequestStatus: string | null = null
   let hireRequestOfferedSalary: number | null = null
+  let hireRequestSpecialty: string | null = null
   if (hireRequestId) {
     const { data: hr } = await supabase
       .from('hire_requests')
-      .select('status, offered_salary')
+      .select('status, offered_salary, specialty')
       .eq('id', hireRequestId)
       .single()
-    hireRequestStatus       = hr?.status ?? null
+    hireRequestStatus        = hr?.status ?? null
     hireRequestOfferedSalary = hr?.offered_salary ?? null
+    hireRequestSpecialty     = hr?.specialty ?? null
   }
 
   // Fetch active engagement between this resident + worker
@@ -106,6 +108,7 @@ export default async function ChatPage({ params }: { params: { id: string } }) {
       hireRequestId={hireRequestId}
       hireRequestStatus={hireRequestStatus}
       hireRequestOfferedSalary={hireRequestOfferedSalary}
+      hireRequestSpecialty={hireRequestSpecialty}
     />
   )
 }

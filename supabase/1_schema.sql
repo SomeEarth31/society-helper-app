@@ -18,7 +18,7 @@ create type attendance_status   as enum ('present','absent','half_day','leave');
 create type payment_status      as enum ('initiated','completed','failed','disputed');
 create type job_status          as enum ('open','filled','expired','cancelled');
 create type application_status  as enum ('pending','accepted','rejected','withdrawn');
-create type hire_request_status as enum ('pending','accepted','declined','cancelled');
+create type hire_request_status as enum ('pending','accepted','declined','cancelled','expired');
 create type notification_type   as enum (
   'job_application','application_accepted','application_rejected',
   'hire_request','hire_accepted','hire_declined',
@@ -166,6 +166,7 @@ create table hire_requests (
   worker_id      uuid not null references workers(id) on delete cascade,
   message        text,
   offered_salary numeric(10,2),
+  specialty      worker_specialty,
   status         hire_request_status default 'pending',
   created_at     timestamptz default now(),
   resolved_at    timestamptz
@@ -237,6 +238,7 @@ create table reviews (
   worker_id     uuid not null references workers(id) on delete cascade,
   rating        int not null check (rating between 1 and 5),
   comment       text,
+  reviewed_on   date not null default current_date,
   created_at    timestamptz default now(),
   unique (engagement_id, reviewer_id)
 );
@@ -249,6 +251,7 @@ create table resident_reviews (
   resident_id   uuid not null references profiles(id) on delete cascade,
   rating        int not null check (rating between 1 and 5),
   comment       text,
+  reviewed_on   date not null default current_date,
   created_at    timestamptz default now(),
   unique (engagement_id, worker_id)
 );
@@ -261,6 +264,13 @@ create policy "resident_reviews_read" on resident_reviews
 
 create policy "resident_reviews_worker_insert" on resident_reviews
   for insert with check (
+    worker_id in (select id from workers where auth_id = auth.uid())
+  );
+create policy "resident_reviews_worker_update" on resident_reviews
+  for update using (
+    worker_id in (select id from workers where auth_id = auth.uid())
+  )
+  with check (
     worker_id in (select id from workers where auth_id = auth.uid())
   );
 
@@ -362,6 +372,16 @@ end;
 $$;
 grant execute on function public.get_unread_counts() to authenticated;
 grant execute on function public.my_worker_id()      to authenticated;
+
+-- Allows a signed-in user to permanently delete their own auth account.
+-- Cascades to profiles (on delete cascade) and nulls workers.auth_id (on delete set null).
+create or replace function public.delete_own_account()
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  delete from auth.users where id = auth.uid();
+end;
+$$;
+grant execute on function public.delete_own_account() to authenticated;
 
 -- ============================================================
 -- GRANTS — required after a `drop schema public cascade` reset.
@@ -601,6 +621,9 @@ create policy "reviews_society_read" on reviews
   for select using (auth.uid() is not null);
 create policy "reviews_employer_insert" on reviews
   for insert with check (auth.uid() = reviewer_id);
+create policy "reviews_employer_update" on reviews
+  for update using (auth.uid() = reviewer_id)
+  with check (auth.uid() = reviewer_id);
 
 -- ============================================================
 -- TRIGGERS
@@ -650,7 +673,7 @@ end;
 $$;
 
 create trigger on_review_insert
-  after insert on reviews
+  after insert or update on reviews
   for each row execute procedure public.update_worker_trust_score();
 
 create or replace function public.update_resident_trust_score()
@@ -667,7 +690,7 @@ end;
 $$;
 
 create trigger on_resident_review_insert
-  after insert on resident_reviews
+  after insert or update on resident_reviews
   for each row execute procedure public.update_resident_trust_score();
 
 -- ============================================================
@@ -814,9 +837,38 @@ begin
   return new;
 end;
 $$;
-create trigger on_new_message_notify
+create trigger on_new_message
   after insert on messages
   for each row execute procedure public.notify_new_message();
+
+-- ============================================================
+-- AUTO-EXPIRE HIRE REQUESTS (7 days)
+-- ============================================================
+
+create or replace function public.expire_old_hire_requests()
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update hire_requests
+  set status = 'expired'
+  where status = 'pending'
+    and created_at < now() - interval '7 days';
+end;
+$$;
+
+-- Schedule via pg_cron (run daily at 2am UTC).
+-- Enable pg_cron in Supabase Dashboard → Extensions → pg_cron first.
+-- Wrapped in DO block so the schema runs cleanly even if pg_cron is not enabled.
+do $$
+begin
+  perform cron.schedule(
+    'expire-hire-requests',
+    '0 2 * * *',
+    $cmd$ select public.expire_old_hire_requests(); $cmd$
+  );
+exception when others then
+  raise notice 'pg_cron not enabled — skipping cron job. Enable it in Supabase Dashboard → Extensions → pg_cron, then re-run this block.';
+end;
+$$;
 
 -- Enable real-time for chat messages
 alter publication supabase_realtime add table messages;

@@ -19,6 +19,7 @@ export const dynamic = 'force-dynamic'
 type Profile = {
   full_name: string | null
   flat_number: string | null
+  society_id: string | null
   role: 'resident' | 'worker' | 'admin' | null
 }
 
@@ -30,7 +31,7 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, flat_number, role')
+    .select('full_name, flat_number, society_id, role')
     .eq('id', user.id)
     .single<Profile>()
 

@@ -12,9 +12,9 @@ export async function middleware(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get:    (n) => req.cookies.get(n)?.value,
-        set:    (n, v, o: CookieOptions) => { res.cookies.set({ name: n, value: v, ...o }) },
-        remove: (n, o: CookieOptions) => { res.cookies.set({ name: n, value: '', ...o }) },
+        get:    (n: string) => req.cookies.get(n)?.value,
+        set:    (n: string, v: string, o: CookieOptions) => { res.cookies.set({ name: n, value: v, ...o }) },
+        remove: (n: string, o: CookieOptions) => { res.cookies.set({ name: n, value: '', ...o }) },
       },
     }
   )
@@ -23,5 +23,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|.*\\.(?:png|jpg|svg)).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|.*\.(?:png|jpg|svg)).*)'],
 }

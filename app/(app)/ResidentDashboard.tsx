@@ -3,7 +3,7 @@
  * Server component.
  */
 import Link from 'next/link'
-import { Users, IndianRupee, CalendarCheck, ChevronRight, Plus, TrendingUp } from 'lucide-react'
+import { Users, IndianRupee, CalendarCheck, Plus, TrendingUp } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
 import AttendanceToggle from '@/components/AttendanceToggle'
 import PaymentButton from '@/components/PaymentButton'
@@ -28,10 +28,21 @@ export default async function ResidentDashboard({
   profile,
 }: {
   userId: string
-  profile: { full_name: string | null; flat_number: string | null } | null
+  profile: { full_name: string | null; flat_number: string | null; society_id: string | null } | null
 }) {
   const supabase = createServerClient()
   const T = getServerTranslations()
+
+  // Fetch society name if profile has one
+  let societyName: string | null = null
+  if (profile?.society_id) {
+    const { data: soc } = await supabase
+      .from('societies')
+      .select('name')
+      .eq('id', profile.society_id)
+      .maybeSingle()
+    societyName = soc?.name ?? null
+  }
 
   const { data: engagements } = await supabase
     .from('engagements')
@@ -75,6 +86,28 @@ export default async function ResidentDashboard({
     return sum + computeDues(e.monthly_salary, s.daysWorked, daysInMonth)
   }, 0)
 
+  // Group engagements by worker_id for dedup display
+  type WorkerGroup = {
+    worker: Engagement['worker']
+    engagements: Engagement[]
+    totalDues: number
+  }
+  const workerGroups: WorkerGroup[] = []
+  const seenWorkers = new Map<string, WorkerGroup>()
+  for (const e of engagements ?? []) {
+    const s    = stats.get(e.id)!
+    const dues = computeDues(e.monthly_salary, s.daysWorked, daysInMonth)
+    if (seenWorkers.has(e.worker.id)) {
+      const g = seenWorkers.get(e.worker.id)!
+      g.engagements.push(e)
+      g.totalDues += dues
+    } else {
+      const g: WorkerGroup = { worker: e.worker, engagements: [e], totalDues: dues }
+      seenWorkers.set(e.worker.id, g)
+      workerGroups.push(g)
+    }
+  }
+
   const firstName = profile?.full_name?.split(' ')[0] ?? 'Resident'
   const initials  = (profile?.full_name ?? 'R').split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase()
 
@@ -89,8 +122,12 @@ export default async function ResidentDashboard({
               {monthLabel}
             </p>
             <h1 className="text-2xl font-black text-slate-900">{T.resident.greeting(firstName)}</h1>
-            {profile?.flat_number && (
-              <p className="text-xs text-slate-400 mt-0.5">Flat {profile.flat_number}</p>
+            {(profile?.flat_number || societyName) && (
+              <p className="text-xs text-slate-400 mt-0.5">
+                {societyName && <span>{societyName}</span>}
+                {societyName && profile?.flat_number && <span> · </span>}
+                {profile?.flat_number && <span>Flat {profile.flat_number}</span>}
+              </p>
             )}
           </div>
           <Link
@@ -113,7 +150,7 @@ export default async function ResidentDashboard({
             {totalDues.toLocaleString('en-IN')}
           </p>
           <div className="mt-4 pt-4 border-t border-white/20 flex items-center gap-5">
-            <Chip icon={Users} value={engagements?.length ?? 0} label={T.resident.helpers} />
+            <Chip icon={Users} value={workerGroups.length} label={T.resident.helpers} />
             <Chip icon={CalendarCheck} value={attendance.length} label={T.resident.marks} />
             <Chip icon={TrendingUp} value={daysInMonth} label={T.resident.daysPerMonth} />
           </div>
@@ -136,7 +173,7 @@ export default async function ResidentDashboard({
           </div>
         </div>
 
-        {(!engagements || engagements.length === 0) ? (
+        {workerGroups.length === 0 ? (
           <EmptyState
             title={T.resident.noHelpers}
             desc={T.resident.noHelpersDesc}
@@ -144,81 +181,100 @@ export default async function ResidentDashboard({
           />
         ) : (
           <ul className="space-y-3">
-            {engagements.map(e => {
-              const s    = stats.get(e.id)!
-              const dues = computeDues(e.monthly_salary, s.daysWorked, daysInMonth)
+            {workerGroups.map(group => {
+              const { worker } = group
+              const firstEng = group.engagements[0]
               return (
-                <li key={e.id} className="rounded-3xl bg-white border border-slate-100 shadow-sm overflow-hidden">
-                  {/* Worker row */}
-                  <Link href={`/engagement/${e.id}`} className="flex items-center gap-3.5 p-4 group">
-                    <WorkerAvatar name={e.worker.full_name} url={e.worker.photo_url} />
+                <li key={worker.id} className="rounded-3xl bg-white border border-slate-100 shadow-sm overflow-hidden">
+                  {/* Worker header row */}
+                  <div className="flex items-center gap-3.5 p-4">
+                    <WorkerAvatar name={worker.full_name} url={worker.photo_url} />
                     <div className="flex-1 min-w-0">
-                      <p className="font-bold text-slate-900 truncate text-[15px]">
-                        {e.worker.full_name}
-                      </p>
+                      <p className="font-bold text-slate-900 truncate text-[15px]">{worker.full_name}</p>
+                      {/* All roles listed */}
                       <p className="text-xs text-slate-400 mt-0.5 capitalize">
-                        {e.service_type ? e.service_type : e.worker.specialty.replace(/_/g, ' ')}
-                        {e.worker.trust_score != null && (
-                          <span className="ml-2 text-amber-500 font-semibold">
-                            ★ {e.worker.trust_score.toFixed(1)} ({e.worker.reviews?.[0]?.count ?? 0})
-                          </span>
-                        )}
-                        {e.worker.trust_score == null && (
-                          <span className="ml-2 text-slate-400 text-xs">Unrated</span>
-                        )}
+                        {group.engagements.map(e =>
+                          (e.service_type ?? e.worker.specialty).replace(/_/g, ' ')
+                        ).join(' · ')}
                       </p>
+                      {worker.trust_score != null ? (
+                        <span className="text-xs text-amber-500 font-semibold">
+                          ★ {worker.trust_score.toFixed(1)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">Unrated</span>
+                      )}
                     </div>
-                    <ChevronRight size={18} className="text-slate-300 group-hover:text-violet-400 transition shrink-0" />
-                  </Link>
+                    {group.engagements.length > 1 && (
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] text-slate-400">Total owed</p>
+                        <p className="text-sm font-black text-slate-900">₹{group.totalDues.toLocaleString('en-IN')}</p>
+                      </div>
+                    )}
+                  </div>
 
-                  {/* Stats + actions */}
-                  <div className="bg-slate-50 border-t border-slate-100 px-4 py-3.5">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                          {T.resident.todayAttendance}
-                        </p>
-                        <div className="mt-1.5">
-                          <AttendanceToggle
+                  {/* Per-engagement rows */}
+                  {group.engagements.map((e, idx) => {
+                    const s    = stats.get(e.id)!
+                    const dues = computeDues(e.monthly_salary, s.daysWorked, daysInMonth)
+                    const role = (e.service_type ?? e.worker.specialty).replace(/_/g, ' ')
+                    return (
+                      <div key={e.id} className={`bg-slate-50 px-4 py-3.5 ${idx === 0 ? 'border-t border-slate-100' : 'border-t border-slate-200'}`}>
+                        {group.engagements.length > 1 && (
+                          <p className="text-[11px] font-bold uppercase tracking-widest text-violet-500 mb-2 capitalize">{role}</p>
+                        )}
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                              {T.resident.todayAttendance}
+                            </p>
+                            <div className="mt-1.5">
+                              <AttendanceToggle
+                                engagementId={e.id}
+                                date={todayStr}
+                                initial={s.today}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                              {s.daysWorked} / {daysInMonth} days
+                            </p>
+                            <p className="text-base font-black text-slate-900 mt-0.5">
+                              ₹{dues.toLocaleString('en-IN')}
+                            </p>
+                            <p className="text-[10px] text-slate-400">{T.resident.owed}</p>
+                          </div>
+                        </div>
+                        <PaymentButton
+                          engagementId={e.id}
+                          amount={dues}
+                          daysWorked={s.daysWorked}
+                          periodStart={startStr}
+                          periodEnd={endStr}
+                          workerName={worker.full_name}
+                        />
+                        <div className="flex gap-2 mt-2">
+                          <EndEngagementButton
                             engagementId={e.id}
-                            date={todayStr}
-                            initial={s.today}
+                            role="resident"
+                            otherName={worker.full_name}
                           />
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                          {s.daysWorked} / {daysInMonth} days
-                        </p>
-                        <p className="text-base font-black text-slate-900 mt-0.5">
-                          ₹{dues.toLocaleString('en-IN')}
-                        </p>
-                        <p className="text-[10px] text-slate-400">{T.resident.owed}</p>
-                      </div>
-                    </div>
-                    <PaymentButton
-                      engagementId={e.id}
-                      amount={dues}
-                      daysWorked={s.daysWorked}
-                      periodStart={startStr}
-                      periodEnd={endStr}
-                      workerName={e.worker.full_name}
-                    />
+                    )
+                  })}
+
+                  {/* Rate button once per worker (on first engagement) */}
+                  <div className="bg-slate-50 border-t border-slate-100 px-4 pb-3.5">
                     <RateWorkerButton
-                      engagementId={e.id}
-                      workerId={e.worker.id}
+                      engagementId={firstEng.id}
+                      workerId={worker.id}
                       reviewerId={userId}
-                      workerName={e.worker.full_name}
-                      trustScore={e.worker.trust_score}
-                      reviewCount={e.worker.reviews?.[0]?.count ?? 0}
+                      workerName={worker.full_name}
+                      trustScore={worker.trust_score}
+                      reviewCount={worker.reviews?.[0]?.count ?? 0}
                     />
-                    <div className="flex gap-2 mt-2">
-                      <EndEngagementButton
-                        engagementId={e.id}
-                        role="resident"
-                        otherName={e.worker.full_name}
-                      />
-                    </div>
                   </div>
                 </li>
               )
@@ -233,7 +289,7 @@ export default async function ResidentDashboard({
 /* ── Sub-components ── */
 
 function Chip({ icon: Icon, value, label }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: React.ElementType
   value: number; label: string
 }) {
   return (

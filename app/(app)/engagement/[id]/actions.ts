@@ -109,11 +109,37 @@ export async function settlePayment(
     if (error) return { ok: false, error: error.message }
   } else {
     // No initiated row — user is recording an out-of-band payment.
+    // Compute current-month period and days_worked for the NOT NULL columns.
+    const now = new Date()
+    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      .toISOString().slice(0, 10)
+    const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+      .toISOString().slice(0, 10)
+
+    const { data: attRows } = await supabase
+      .from('attendance')
+      .select('status')
+      .eq('engagement_id', engagementId)
+      .gte('date', periodStart)
+      .lte('date', periodEnd)
+
+    const daysWorked = (attRows ?? []).reduce((sum, r) => {
+      if (r.status === 'present')  return sum + 1
+      if (r.status === 'half_day') return sum + 0.5
+      return sum
+    }, 0)
+
+    const nodalVpa = process.env.NEXT_PUBLIC_NODAL_VPA ?? ''
+
     const { error } = await supabase.from('payments').insert({
       engagement_id: engagementId,
       amount,
       utr: utr.trim(),
       status: 'completed',
+      period_start: periodStart,
+      period_end:   periodEnd,
+      days_worked:  daysWorked,
+      nodal_vpa:    nodalVpa,
     })
     if (error) return { ok: false, error: error.message }
   }

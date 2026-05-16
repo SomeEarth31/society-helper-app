@@ -5,7 +5,6 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import { Bell, Briefcase, CheckCircle2, XCircle, MessageCircle, UserPlus, Star } from 'lucide-react'
-import MarkAllRead from './MarkAllRead'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,7 +34,7 @@ function notifLink(notif: any): string {
   const p = notif.payload ?? {}
   if (p.conversation_id) return `/chat/${p.conversation_id}`
   if (p.job_posting_id && notif.type === 'job_application') return `/jobs/${p.job_posting_id}/applicants`
-  if (p.hire_request_id && notif.type.startsWith('hire_request')) return `/hire-requests`
+  if (p.hire_request_id) return `/hire-requests`
   return '/notifications'
 }
 

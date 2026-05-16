@@ -1,26 +1,39 @@
 'use client'
 /**
- * HireForm — resident fills message + offered salary, submits hire_request.
+ * HireForm — resident fills specialty, message + offered salary, submits hire_request.
  */
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { IndianRupee, Send, CheckCircle2, Loader2 } from 'lucide-react'
 
+const SPECIALTIES = [
+  { value: 'cook',       label: 'Cook' },
+  { value: 'cleaner',    label: 'Cleaner' },
+  { value: 'car_washer', label: 'Car Washer' },
+  { value: 'caretaker',  label: 'Caretaker' },
+  { value: 'gardener',   label: 'Gardener' },
+  { value: 'maid',       label: 'Maid' },
+  { value: 'other',      label: 'Other' },
+]
+
 export default function HireForm({
   workerId,
   workerName,
+  workerSpecialty,
   isAvailable,
   existingRequestId,
 }: {
   workerId: string
   workerName: string
+  workerSpecialty: string
   isAvailable: boolean
   existingRequestId: string | null
 }) {
   const router   = useRouter()
   const supabase = createClient()
 
+  const [specialty,     setSpecialty]     = useState(workerSpecialty || 'other')
   const [message,       setMessage]       = useState('')
   const [offeredSalary, setOfferedSalary] = useState('')
   const [submitting,    setSubmitting]    = useState(false)
@@ -41,6 +54,7 @@ export default function HireForm({
       worker_id:      workerId,
       message:        message.trim(),
       offered_salary: isNaN(salary as number) ? null : salary,
+      specialty:      specialty,
       status:         'pending',
     })
 
@@ -81,8 +95,25 @@ export default function HireForm({
       <div className="rounded-3xl bg-white border border-slate-100 shadow-sm p-5 space-y-4">
         <h2 className="font-black text-slate-900">Send a hire request</h2>
         <p className="text-xs text-slate-400 -mt-2">
-          Tell {workerName} what you need and what you're offering.
+          Tell {workerName} what you need and what you&apos;re offering.
         </p>
+
+        {/* Specialty selector */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+            Role / Specialty <span className="text-red-400">*</span>
+          </label>
+          <select
+            value={specialty}
+            onChange={e => setSpecialty(e.target.value)}
+            required
+            className="w-full rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-3 text-[15px] text-slate-900 outline-none focus:border-violet-500 focus:bg-white transition appearance-none"
+          >
+            {SPECIALTIES.map(s => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </div>
 
         {/* Message */}
         <div className="space-y-1.5">

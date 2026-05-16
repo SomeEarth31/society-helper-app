@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 type PaymentRow = {
   id: string
   amount: number
-  status: 'initiated' | 'pending' | 'completed' | 'failed' | string
+  status: 'initiated' | 'completed' | 'failed' | 'disputed' | string
   upi_txn_ref: string | null
   utr: string | null
   created_at: string
@@ -150,8 +150,8 @@ function StatusPill({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     completed: { label: 'Paid',      cls: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
     initiated: { label: 'Initiated', cls: 'bg-amber-50 text-amber-700 border-amber-100' },
-    pending:   { label: 'Pending',   cls: 'bg-amber-50 text-amber-700 border-amber-100' },
     failed:    { label: 'Failed',    cls: 'bg-rose-50 text-rose-700 border-rose-100' },
+    disputed:  { label: 'Disputed',  cls: 'bg-orange-50 text-orange-700 border-orange-100' },
   }
   const meta = map[status] ?? { label: status, cls: 'bg-slate-100 text-slate-600 border-slate-200' }
   return (

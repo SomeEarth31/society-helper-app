@@ -32,6 +32,7 @@ type JobRow = {
   id: string; specialty: string; description: string | null
   offered_salary: number | null; created_at: string
   employer: { full_name: string | null; flat_number: string | null } | null
+  society: { name: string } | null
 }
 
 export default async function WorkerDashboard({
@@ -102,7 +103,7 @@ export default async function WorkerDashboard({
     // Build query — visible-to-all workers (no societies) get ALL open jobs matching specialty
     let query = supabase
       .from('job_postings')
-      .select('id, specialty, description, offered_salary, created_at, employer:profiles!job_postings_employer_id_fkey ( full_name, flat_number )')
+      .select('id, specialty, description, offered_salary, created_at, employer:profiles!job_postings_employer_id_fkey ( full_name, flat_number ), society:societies!job_postings_society_id_fkey ( name )')
       .eq('status', 'open')
       .order('created_at', { ascending: false })
 
@@ -112,6 +113,17 @@ export default async function WorkerDashboard({
 
     const { data } = await query.returns<JobRow[]>()
     jobs = (data ?? []).filter(j => !worker.specialty || j.specialty === worker.specialty)
+  }
+
+  // Fetch applied job posting IDs for this worker
+  let appliedJobIds = new Set<string>()
+  if (worker) {
+    const { data: apps } = await supabase
+      .from('job_applications')
+      .select('job_posting_id')
+      .eq('worker_id', worker.id)
+      .in('status', ['pending', 'accepted'])
+    appliedJobIds = new Set((apps ?? []).map(a => a.job_posting_id))
   }
 
   // Pending hire requests count for badge
@@ -279,6 +291,7 @@ export default async function WorkerDashboard({
                         {j.specialty.replace(/_/g, ' ')} needed
                       </p>
                       <p className="text-xs text-slate-400 mt-0.5">
+                        {j.society?.name && <span>{j.society.name} · </span>}
                         {j.employer?.full_name ?? 'Resident'}
                         {j.employer?.flat_number ? ` · Flat ${j.employer.flat_number}` : ''}
                       </p>
@@ -295,11 +308,15 @@ export default async function WorkerDashboard({
                     {j.description}
                   </p>
                 )}
-                {worker && (
-                  <div className="mt-3 pt-3 border-t border-slate-100">
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  {appliedJobIds.has(j.id) ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-2xl px-3 py-2">
+                      ✓ Applied
+                    </span>
+                  ) : worker ? (
                     <QuickApplyButton jobId={j.id} workerId={worker.id} />
-                  </div>
-                )}
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>
@@ -320,7 +337,7 @@ export default async function WorkerDashboard({
 }
 
 function EChip({ icon: Icon, value, label }: {
-  icon: React.ComponentType<{ size?: number; className?: string }>
+  icon: React.ElementType
   value: number; label: string
 }) {
   return (
