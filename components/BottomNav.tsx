@@ -25,17 +25,20 @@ export default function BottomNav({
   const { T }    = useLanguage()
   const isWorker = role === 'worker'
 
+  // Suppress chat badge when the user is already on a chat page
+  const chatBadge = pathname.startsWith('/chat') ? 0 : unreadMessages
+
   const RESIDENT_TABS = [
     { href: '/',        label: T.nav.home,    icon: Home,          badgeCount: 0 },
     { href: '/jobs',    label: T.nav.jobs,    icon: Briefcase,     badgeCount: unreadJobNotifications },
-    { href: '/chat',    label: T.nav.chat,    icon: MessageCircle, badgeCount: unreadMessages },
+    { href: '/chat',    label: T.nav.chat,    icon: MessageCircle, badgeCount: chatBadge },
     { href: '/profile', label: T.nav.profile, icon: User,          badgeCount: 0 },
   ]
 
   const WORKER_TABS = [
     { href: '/',          label: T.nav.home,     icon: Home,          badgeCount: 0 },
     { href: '/directory', label: T.nav.findJobs, icon: Briefcase,     badgeCount: 0 },
-    { href: '/chat',      label: T.nav.chat,     icon: MessageCircle, badgeCount: unreadMessages },
+    { href: '/chat',      label: T.nav.chat,     icon: MessageCircle, badgeCount: chatBadge },
     { href: '/profile',   label: T.nav.account,  icon: User,          badgeCount: 0 },
   ]
 

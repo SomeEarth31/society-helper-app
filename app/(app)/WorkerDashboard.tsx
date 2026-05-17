@@ -5,12 +5,12 @@
 import Link from 'next/link'
 import {
   IndianRupee, CalendarCheck, Briefcase,
-  MapPin, TrendingUp, Bell,
+  TrendingUp, Bell,
 } from 'lucide-react'
 import { createServerClient } from '@/lib/supabase/server'
-import { RateResidentButton } from '@/components/RateButtons'
 import QuickApplyButton from '@/components/QuickApplyButton'
-import EndEngagementButton from '@/components/EndEngagementButton'
+import EmployerEngagementCard from '@/components/EmployerEngagementCard'
+import type { EmpEngData, EmployerInfo } from '@/components/EmployerEngagementCard'
 import { getServerTranslations } from '@/lib/i18n/server'
 
 type WorkerSelf = {
@@ -18,13 +18,14 @@ type WorkerSelf = {
   daily_rate: number | null; society_id: string | null; photo_url: string | null
 }
 type EngagementRow = {
-  id: string; monthly_salary: number; status: string
+  id: string; monthly_salary: number; status: string; service_type: string | null
   employer: {
     id: string
     full_name: string | null
     flat_number: string | null
     trust_score: number | null
     resident_reviews: { count: number }[]
+    society: { name: string } | null
   } | null
 }
 type PaymentRow = { amount: number; status: string; created_at: string }
@@ -53,14 +54,18 @@ export default async function WorkerDashboard({
 
   const { data: engagements } = await supabase
     .from('engagements')
-    .select('id, monthly_salary, status, employer:profiles!engagements_employer_id_fkey ( id, full_name, flat_number, trust_score, resident_reviews(count) )')
+    .select('id, monthly_salary, status, service_type, employer:profiles!engagements_employer_id_fkey ( id, full_name, flat_number, trust_score, resident_reviews(count), society:societies(name) )')
     .eq('worker_id', worker?.id ?? '00000000-0000-0000-0000-000000000000')
     .eq('status', 'active')
     .returns<EngagementRow[]>()
 
   const now        = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const mEnd       = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   const startIso   = monthStart.toISOString()
+  const startStr   = startIso.slice(0, 10)
+  const todayStr   = now.toISOString().slice(0, 10)
+  const daysInMonth = mEnd.getDate()
   const monthLabel = monthStart.toLocaleString('en-IN', { month: 'long', year: 'numeric' })
 
   const engIds = (engagements ?? []).map(e => e.id)
@@ -137,6 +142,36 @@ export default async function WorkerDashboard({
     pendingHireCount = count ?? 0
   }
 
+  // Group engagements by employer_id, attaching full attendance per engagement
+  type EmployerGroup = { employer: EmployerInfo; engagements: EmpEngData[] }
+  const employerGroups: EmployerGroup[] = []
+  const seenEmployers = new Map<string, EmployerGroup>()
+  for (const e of engagements ?? []) {
+    if (!e.employer) continue
+    const empData: EmpEngData = {
+      id: e.id,
+      monthly_salary: e.monthly_salary,
+      service_type: e.service_type,
+      attendance: attendance
+        .filter(a => a.engagement_id === e.id)
+        .map(a => ({ date: a.date, status: a.status })),
+    }
+    if (seenEmployers.has(e.employer.id)) {
+      seenEmployers.get(e.employer.id)!.engagements.push(empData)
+    } else {
+      const info: EmployerInfo = {
+        id: e.employer.id,
+        full_name: e.employer.full_name,
+        flat_number: e.employer.flat_number,
+        trust_score: e.employer.trust_score,
+        reviewCount: e.employer.resident_reviews?.[0]?.count ?? 0,
+        societyName: e.employer.society?.name ?? null,
+      }
+      seenEmployers.set(e.employer.id, { employer: info, engagements: [empData] })
+      employerGroups.push(seenEmployers.get(e.employer.id)!)
+    }
+  }
+
   const displayName = profile?.full_name ?? worker?.full_name ?? 'Helper'
   const firstName   = displayName.split(' ')[0]
   const initials    = displayName.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase()
@@ -191,7 +226,7 @@ export default async function WorkerDashboard({
             )}
           </Link>
           <div className="mt-4 pt-4 border-t border-white/20 flex items-center gap-5">
-            <EChip icon={CalendarCheck} value={engagements?.length ?? 0} label={T.worker.homes} />
+            <EChip icon={CalendarCheck} value={employerGroups.length} label={T.worker.homes} />
             <EChip icon={Briefcase}     value={jobs.length}               label={T.worker.openings} />
             <EChip icon={TrendingUp}    value={worker?.daily_rate ?? 0}   label="₹/day" />
           </div>
@@ -201,63 +236,20 @@ export default async function WorkerDashboard({
       {/* ── Active Engagements ── */}
       <section className="px-5 mt-7">
         <h2 className="text-lg font-black text-slate-900 mb-4">{T.worker.activeEngagements}</h2>
-        {!engagements?.length ? (
+        {!employerGroups.length ? (
           <EmptyCard text={T.worker.noEngagements} />
         ) : (
           <ul className="space-y-3">
-            {engagements.map(e => (
-              <li key={e.id} className="rounded-3xl bg-white border border-slate-100 shadow-sm p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-bold text-slate-900 text-[15px] truncate">
-                      {e.employer?.full_name ?? 'Resident'}
-                    </p>
-                    <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-400">
-                      <MapPin size={11} />
-                      Flat {e.employer?.flat_number ?? '—'}
-                    </p>
-                    <p className="mt-0.5 text-xs">
-                      {e.employer?.trust_score != null
-                        ? <span className="text-amber-600 font-bold">★ {e.employer.trust_score.toFixed(1)} <span className="text-slate-400 font-normal">({e.employer.resident_reviews?.[0]?.count ?? 0} votes)</span></span>
-                        : <span className="text-slate-400">Unrated resident</span>
-                      }
-                    </p>
-                    <p className="mt-1 text-xs font-bold text-emerald-600">
-                      {T.worker.daysPresent(attendance.filter(a => a.engagement_id === e.id && a.status === 'present').length)}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{T.worker.monthly}</p>
-                    <p className="text-lg font-black text-slate-900 mt-0.5">
-                      ₹{e.monthly_salary.toLocaleString('en-IN')}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 flex gap-2">
-                  <Link
-                    href="/chat"
-                    className="flex-1 text-center py-2 bg-slate-50 text-slate-600 rounded-xl text-xs font-bold border border-slate-100 flex items-center justify-center"
-                  >
-                    {T.common.message}
-                  </Link>
-                  {worker && e.employer?.id && (
-                    <RateResidentButton
-                      engagementId={e.id}
-                      workerId={worker.id}
-                      residentId={e.employer.id}
-                      trustScore={e.employer.trust_score}
-                      reviewCount={e.employer.resident_reviews?.[0]?.count ?? 0}
-                    />
-                  )}
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <EndEngagementButton
-                    engagementId={e.id}
-                    role="worker"
-                    otherName={e.employer?.full_name ?? 'Resident'}
-                  />
-                </div>
-              </li>
+            {employerGroups.map(group => (
+              <EmployerEngagementCard
+                key={group.employer.id}
+                workerId={worker!.id}
+                employer={group.employer}
+                engagements={group.engagements}
+                daysInMonth={daysInMonth}
+                startStr={startStr}
+                todayStr={todayStr}
+              />
             ))}
           </ul>
         )}

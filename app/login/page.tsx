@@ -8,12 +8,15 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ArrowLeft, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import LangToggle from '@/components/LangToggle'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 type Step = 'email' | 'password' | 'otp' | 'signup' | 'signup-otp'
 
 export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
+  const { T } = useLanguage()
+  const L = T.login
 
   const [step, setStep]               = useState<Step>('email')
   const [email, setEmail]             = useState('')
@@ -35,7 +38,7 @@ export default function LoginPage() {
     setLoading(false)
     if (rpcErr) { setStep('password'); return }
     if (exists) { setStep('password') }
-    else { setSignupEmail(email); setInfo('No account found. Create one below.'); setStep('signup') }
+    else { setSignupEmail(email); setInfo(L.noAccount); setStep('signup') }
   }
 
   async function handlePasswordSignIn(e: React.FormEvent) {
@@ -52,7 +55,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } })
     setLoading(false)
     if (error) { setError(error.message); return }
-    setInfo(`Code sent to ${email}.`); setStep('otp')
+    setInfo(L.codeSent(email)); setStep('otp')
   }
 
   async function handleVerifyOtp(e: React.FormEvent) {
@@ -70,12 +73,12 @@ export default function LoginPage() {
     clear(); setLoading(true)
     const { data: exists } = await supabase.rpc('email_exists', { check_email: signupEmail })
     if (exists) {
-      setEmail(signupEmail); setInfo('Email matches — sign in below.'); setStep('email'); setLoading(false); return
+      setEmail(signupEmail); setInfo(L.emailMatches); setStep('email'); setLoading(false); return
     }
     const { error } = await supabase.auth.signInWithOtp({ email: signupEmail, options: { shouldCreateUser: true } })
     setLoading(false)
     if (error) { setError(error.message); return }
-    setInfo(`Code sent to ${signupEmail}.`); setStep('signup-otp')
+    setInfo(L.codeSent(signupEmail)); setStep('signup-otp')
   }
 
   async function handleSignupVerifyOtp(e: React.FormEvent) {
@@ -121,19 +124,19 @@ export default function LoginPage() {
           </div>
         )}
 
-        <h1 className="text-4xl font-black text-white leading-none tracking-tight">
-          {step === 'email'      && <>Welcome.</>}
-          {step === 'password'   && <>Enter<br />password.</>}
-          {step === 'otp'        && <>Check your<br />email.</>}
-          {step === 'signup'     && <>Create<br />account.</>}
-          {step === 'signup-otp' && <>Verify<br />your email.</>}
+        <h1 className="text-4xl font-black text-white leading-none tracking-tight" style={{ whiteSpace: 'pre-line' }}>
+          {step === 'email'      && L.welcome}
+          {step === 'password'   && L.enterPassword}
+          {step === 'otp'        && L.checkEmail}
+          {step === 'signup'     && L.createAccount}
+          {step === 'signup-otp' && L.verifyEmail}
         </h1>
         <p className="mt-3 text-slate-400 text-sm leading-relaxed">
-          {step === 'email'      && 'Enter your email to get started.'}
-          {step === 'password'   && `Signing in as ${email}`}
-          {step === 'otp'        && `We sent a code to ${email}`}
-          {step === 'signup'     && 'Join your society in seconds.'}
-          {step === 'signup-otp' && `Check ${signupEmail} for your 6-digit code.`}
+          {step === 'email'      && L.subtitleEmail}
+          {step === 'password'   && L.subtitlePassword(email)}
+          {step === 'otp'        && L.subtitleOtp(email)}
+          {step === 'signup'     && L.subtitleSignup}
+          {step === 'signup-otp' && L.subtitleSignupOtp(signupEmail)}
         </p>
       </div>
 
@@ -155,14 +158,14 @@ export default function LoginPage() {
 
         {step === 'email' && (
           <form onSubmit={handleEmailContinue} className="space-y-4">
-            <InputField label="Email address" type="email" value={email}
+            <InputField label={L.emailLabel} type="email" value={email}
               onChange={setEmail} placeholder="you@example.com" autoComplete="email" />
-            <PrimaryBtn loading={loading} disabled={!email} label="Continue" />
+            <PrimaryBtn loading={loading} disabled={!email} label={L.continue} />
             <div className="pt-5 text-center border-t border-slate-100">
-              <p className="text-sm text-slate-400 mb-3">New to Society Helper?</p>
+              <p className="text-sm text-slate-400 mb-3">{L.newUser}</p>
               <button type="button" onClick={() => { clear(); setStep('signup') }}
                 className="text-[15px] font-bold text-violet-600 min-h-[44px]">
-                Create an account →
+                {L.createAccountLink}
               </button>
             </div>
           </form>
@@ -171,7 +174,7 @@ export default function LoginPage() {
         {step === 'password' && (
           <form onSubmit={handlePasswordSignIn} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Password</label>
+              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{L.passwordLabel}</label>
               <div className="relative">
                 <input
                   type={showPwd ? 'text' : 'password'} required autoComplete="current-password"
@@ -184,36 +187,36 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-            <PrimaryBtn loading={loading} disabled={!password} label="Sign in" />
-            <SecondaryBtn loading={loading} onClick={handleSendOtp} label="Send a one-time code instead" />
+            <PrimaryBtn loading={loading} disabled={!password} label={L.signIn} />
+            <SecondaryBtn loading={loading} onClick={handleSendOtp} label={L.sendOtp} />
           </form>
         )}
 
         {step === 'otp' && (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
-            <OtpInput value={otp} onChange={setOtp} />
-            <PrimaryBtn loading={loading} disabled={otp.length < 6} label="Verify & sign in" />
+            <OtpInput label={L.verificationCode} value={otp} onChange={setOtp} />
+            <PrimaryBtn loading={loading} disabled={otp.length < 6} label={L.verifySignIn} />
           </form>
         )}
 
         {step === 'signup' && (
           <form onSubmit={handleSignupSendOtp} className="space-y-4">
-            <InputField label="Your email address" type="email" value={signupEmail}
+            <InputField label={L.yourEmailLabel} type="email" value={signupEmail}
               onChange={setSignupEmail} placeholder="you@example.com" autoComplete="email" />
-            <PrimaryBtn loading={loading} disabled={!signupEmail} label="Send verification code" />
+            <PrimaryBtn loading={loading} disabled={!signupEmail} label={L.sendVerificationCode} />
           </form>
         )}
 
         {step === 'signup-otp' && (
           <form onSubmit={handleSignupVerifyOtp} className="space-y-4">
-            <OtpInput value={otp} onChange={setOtp} />
-            <PrimaryBtn loading={loading} disabled={otp.length < 6} label="Verify & continue" />
+            <OtpInput label={L.verificationCode} value={otp} onChange={setOtp} />
+            <PrimaryBtn loading={loading} disabled={otp.length < 6} label={L.verifyContinue} />
           </form>
         )}
       </div>
 
       <p className="bg-white py-4 text-center text-[11px] text-slate-300">
-        By continuing you agree to our terms of service.
+        {L.terms}
       </p>
     </div>
   )
@@ -234,10 +237,10 @@ function InputField({ label, type, value, onChange, placeholder, autoComplete }:
   )
 }
 
-function OtpInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function OtpInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <label className="block">
-      <span className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">Verification code</span>
+      <span className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">{label}</span>
       <input type="text" inputMode="numeric" required maxLength={8}
         value={value} onChange={e => onChange(e.target.value.replace(/\D/g, ''))}
         placeholder="· · · · · ·"

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
 import { Plus, Users, Clock, CheckCircle2, XCircle, Briefcase } from 'lucide-react'
 import DeleteJobButton from '@/components/DeleteJobButton'
+import ClosedJobsSection from '@/components/ClosedJobsSection'
 
 export const dynamic = 'force-dynamic'
 
@@ -100,16 +101,13 @@ export default async function JobsPage() {
           </div>
         )}
 
-        {/* Closed jobs */}
+        {/* Closed jobs — collapsed by default */}
         {closed.length > 0 && (
-          <section>
-            <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Closed / Filled</p>
-            <ul className="space-y-3">
-              {closed.map(job => (
-                <JobCard key={job.id} job={job} muted />
-              ))}
-            </ul>
-          </section>
+          <ClosedJobsSection count={closed.length}>
+            {closed.map(job => (
+              <JobCard key={job.id} job={job} muted />
+            ))}
+          </ClosedJobsSection>
         )}
       </div>
     </main>

@@ -197,6 +197,7 @@ export default function ChatRoom({
     setHireStatus('accepted')
     setActionLoading(null)
     router.refresh()
+    router.push('/')
   }
 
   // ── Worker declines a hire request ──
