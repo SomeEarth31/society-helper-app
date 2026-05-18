@@ -1,9 +1,72 @@
-# Society Helper Directory & Ledger — PWA
+# Society Helper
 
-A Concierge MVP for digitizing your residential society's domestic-help market.
-Distributed via WhatsApp link, no app store, no upfront fees.
+A mobile-first PWA for residential societies to find, hire, and pay verified domestic help — no app store, no upfront fees, distributed via a WhatsApp link.
 
-> Stack: **Next.js 14 (App Router)** • **Supabase** (Postgres + Auth + RLS) • **Tailwind CSS** • **Lucide React** • **UPI Intent Deep Links** • **Vercel**
+> **Stack:** Next.js 14 (App Router) · Supabase (Postgres + Auth + RLS) · Tailwind CSS · Lucide React · UPI Intent Deep Links · Vercel
+
+---
+
+## What is Society Helper?
+
+Society Helper connects residents of a housing society with domestic workers — maids, cooks, car washers, caretakers, gardeners, and more. Residents can browse available workers, post jobs, track attendance, and pay directly via UPI. Workers can set their availability, apply for jobs, and manage their engagements — all from their phone.
+
+The app is role-aware: the experience is entirely different depending on whether you log in as a resident or a worker.
+
+---
+
+## How It Works
+
+### For Residents
+
+**Finding Help**
+Residents land on a directory of all active workers in their society. Each worker card shows their name, specialty, daily rate, trust score, and whether they are currently available. Tapping a worker opens their full profile where you can send a hire request.
+
+**Posting Jobs**
+If you have a specific requirement, you can post a job listing with a title, specialty, description, schedule, and offered salary. Workers in your society can apply, and you'll get notified when they do. From the Jobs page you can review all applicants and accept or reject them.
+
+**Managing Engagements**
+Once you hire a worker, an engagement is created. From the dashboard you can see all your active engagements, mark attendance day by day, and view a full attendance calendar for any given month. The dashboard also shows a dues summary — how much you owe based on days worked and the agreed daily rate.
+
+**Paying Workers**
+Payments are made via UPI intent deep links — tapping Pay opens your UPI app (GPay, PhonePe, Paytm, etc.) directly with the worker's VPA and the correct amount pre-filled. All payments are logged with their status and UTR reference in the Payments tab.
+
+**Messaging**
+Residents can message workers directly from the app. The Chat tab shows all your active conversations.
+
+---
+
+### For Workers
+
+**Profile & Availability**
+Workers set up a profile with their specialty, daily rate, and a photo. An availability toggle on the dashboard lets them flip between available and unavailable — residents only see available workers by default.
+
+**Finding Jobs**
+The Directory tab shows workers a job board of all open postings in their society. They can apply with one tap and track the status of their applications.
+
+**Hire Requests**
+When a resident sends a hire request, the worker sees it in the Hire Requests tab and can accept or decline.
+
+**Tracking Work**
+Workers can see their active engagements and the attendance calendar — a useful reference for knowing what they are owed at the end of the month.
+
+---
+
+## Key Pages
+
+| Route | Resident | Worker |
+|---|---|---|
+| `/` | Dashboard — active engagements, attendance, dues | Dashboard — active engagements, hire requests |
+| `/directory` | Browse available workers | Browse open job postings |
+| `/directory/[workerId]` | Worker profile + hire CTA | — |
+| `/jobs` | Manage job postings, view applicants | Redirects to directory |
+| `/jobs/new` | Post a new job | — |
+| `/hire-requests` | — | Pending hire requests |
+| `/engagement/[id]` | Attendance calendar + payment | Attendance calendar |
+| `/payments` | Full payment history | — |
+| `/chat` | All conversations | All conversations |
+| `/notifications` | App notifications | App notifications |
+| `/profile` | Edit profile, change password, delete account | Edit profile, toggle availability |
+| `/onboarding` | First-time setup (name, flat number) | First-time setup (name, specialty, rate) |
 
 ---
 
@@ -12,49 +75,90 @@ Distributed via WhatsApp link, no app store, no upfront fees.
 ```
 society-helper-app/
 ├── app/
-│   ├── (auth)/
-│   │   └── login/
-│   │       └── page.tsx              # Phone OTP login (Supabase)
-│   ├── (app)/                        # Auth-gated route group
-│   │   ├── layout.tsx                # Bottom nav + auth guard
-│   │   ├── page.tsx                  # ⭐ DASHBOARD (Module 2: Ledger)
-│   │   ├── directory/
-│   │   │   └── page.tsx              # Module 1: Worker directory
-│   │   ├── helper/[id]/
-│   │   │   └── page.tsx              # Worker detail + Hire CTA
-│   │   ├── engagement/[id]/
-│   │   │   ├── page.tsx              # Attendance calendar + history
-│   │   │   └── actions.ts            # Server actions (mark attendance, settle)
-│   │   └── profile/
-│   │       └── page.tsx
-│   ├── api/
-│   │   └── auth/callback/route.ts    # Supabase auth callback
-│   ├── layout.tsx                    # Root layout (fonts, PWA meta)
-│   └── globals.css
+│   ├── layout.tsx                          # Root layout (fonts, PWA meta, Analytics)
+│   ├── providers.tsx                       # Client-side context providers
+│   ├── globals.css
+│   ├── login/
+│   │   └── page.tsx                        # Phone OTP login
+│   ├── onboarding/
+│   │   ├── page.tsx
+│   │   └── OnboardingForm.tsx              # Role-aware first-time setup
+│   └── (app)/                              # Auth-gated route group
+│       ├── layout.tsx                      # Auth guard + bottom nav + badge counts
+│       ├── page.tsx                        # Dashboard (role-aware)
+│       ├── ResidentDashboard.tsx
+│       ├── WorkerDashboard.tsx
+│       ├── directory/
+│       │   ├── page.tsx                    # Worker list (resident) / job board (worker)
+│       │   ├── WorkerList.tsx
+│       │   ├── JobBoard.tsx
+│       │   ├── JobList.tsx
+│       │   └── [workerId]/
+│       │       ├── page.tsx                # Worker profile
+│       │       └── HireForm.tsx
+│       ├── jobs/
+│       │   ├── page.tsx                    # Resident job postings
+│       │   ├── new/page.tsx                # Post a job
+│       │   └── [id]/applicants/
+│       │       ├── page.tsx
+│       │       └── ApplicantActions.tsx
+│       ├── hire-requests/
+│       │   ├── page.tsx
+│       │   └── HireRequestCard.tsx
+│       ├── engagement/[id]/
+│       │   ├── page.tsx                    # Attendance calendar + pay button
+│       │   ├── AttendanceCalendar.tsx
+│       │   └── actions.ts                  # Server actions (mark attendance, settle)
+│       ├── engagements/[id]/
+│       │   └── page.tsx
+│       ├── payments/
+│       │   └── page.tsx                    # Payment history
+│       ├── chat/
+│       │   ├── page.tsx                    # Conversation list
+│       │   └── [id]/
+│       │       ├── page.tsx
+│       │       └── ChatRoom.tsx
+│       ├── notifications/
+│       │   ├── page.tsx
+│       │   └── MarkAllRead.tsx
+│       ├── profile/
+│       │   ├── page.tsx
+│       │   ├── ResidentProfileForm.tsx
+│       │   ├── AvailabilityToggle.tsx
+│       │   ├── LogoutButton.tsx
+│       │   ├── DeleteAccountButton.tsx
+│       │   └── edit/
+│       │       ├── page.tsx
+│       │       └── ResidentEditForm.tsx
+│       ├── worker-profile/
+│       │   ├── page.tsx
+│       │   └── WorkerProfileForm.tsx
+│       └── change-password/
+│           └── page.tsx
+├── auth/
+│   └── callback/
+│       └── route.ts                        # Supabase auth callback
 ├── components/
-│   ├── BottomNav.tsx                 # Mobile bottom navigation
-│   ├── WorkerCard.tsx                # Reusable directory card
-│   ├── AttendanceCalendar.tsx        # Month-grid toggle (engagement page)
-│   ├── AttendanceToggle.tsx          # Today's quick toggle (dashboard)
-│   ├── PaymentButton.tsx             # ⭐ UPI deep-link launcher
-│   └── DuesCard.tsx                  # Current-month dues summary
+│   ├── BottomNav.tsx
+│   ├── AttendanceToggle.tsx
+│   ├── PaymentButton.tsx
+│   ├── RateButtons.tsx
+│   ├── QuickApplyButton.tsx
+│   ├── DeleteJobButton.tsx
+│   ├── EndEngagementButton.tsx
+│   └── ClosedJobsSection.tsx
 ├── lib/
 │   ├── supabase/
-│   │   ├── client.ts                 # Browser client
-│   │   ├── server.ts                 # Server client (RSC + actions)
-│   │   └── middleware.ts             # Session refresh
-│   ├── upi.ts                        # UPI deep-link builder + parser
-│   └── utils.ts
-├── supabase/
-│   ├── schema.sql                    # ⭐ DB schema + RLS policies
-│   └── seed.sql                      # Sample data (your 100 numbers go here)
+│   │   ├── client.ts                       # Browser client
+│   │   └── server.ts                       # Server client (RSC + actions)
+│   └── upi.ts                              # UPI deep-link builder
+├── types/
+│   └── database.ts                         # Generated Supabase types
 ├── public/
-│   ├── manifest.json                 # PWA manifest
+│   ├── manifest.json                       # PWA manifest
 │   ├── icon-192.png
 │   └── icon-512.png
-├── types/database.ts                 # `supabase gen types` output
-├── middleware.ts                     # Next middleware (auth refresh)
-├── .env.local.example
+├── middleware.ts                           # Session refresh on every request
 ├── next.config.js
 ├── tailwind.config.ts
 ├── tsconfig.json
@@ -63,41 +167,34 @@ society-helper-app/
 
 ---
 
-## Setup (10 minutes, end-to-end)
+## Setup
 
-1. **Create Supabase project** → copy `URL` and `anon key` into `.env.local`.
-2. Open Supabase **SQL Editor** → paste contents of `supabase/schema.sql` → Run.
-3. (Optional) Paste `supabase/seed.sql` with your society + workers.
-4. In Supabase Auth → **Providers** → enable **Phone** (use the free 30 SMS/day quota; switch to MSG91/Twilio later via the same provider interface).
-5. `npm install && npm run dev`.
-6. Deploy to Vercel — add the same env vars. The Vercel preview URL is your WhatsApp distribution link.
+**1. Supabase**
+- Create a project at supabase.com
+- Copy the project URL and anon key
+- In the SQL editor, run `supabase/schema.sql` to create tables and RLS policies
+- Under Authentication → Providers, enable Phone (Supabase gives 30 free SMS/day; swap to Twilio or MSG91 later)
+- Under Authentication → URL Configuration, set your Site URL and add redirect URLs for your Vercel deployment
+
+**2. Environment variables**
 
 ```bash
-# .env.local
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-NEXT_PUBLIC_NODAL_VPA=samarth@upi          # your nodal account
-NEXT_PUBLIC_NODAL_PAYEE_NAME=SocietyHelp   # shown in UPI apps
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ```
 
----
+**3. Run locally**
 
-## Architectural Notes
+```bash
+npm install
+npm run dev
+```
 
-**Why Server Components + Server Actions.** All reads happen on the server with the user's session cookie — RLS does the security work, you write almost no auth checks. Mutations are Server Actions, which gives you optimistic-UI for free and keeps the bundle tiny.
-
-**Why a `societies` table from day 1.** You'll expand to society #2 the moment this works. Multi-tenancy as an afterthought is brutal; baking it in now costs nothing.
-
-**Why UPI Intent, not a gateway.** Zero fees, zero KYC, zero merchant onboarding. The trade-off is reconciliation: you collect to your nodal VPA, then settle to worker VPAs (manually for now, batched later). Document the UTR on each `payments` row.
-
-**Trust Score.** Stubbed at 3.0 for everyone. Compute later from: attendance consistency × tenure × employer ratings. Don't optimize this until you have engagement data.
+**4. Deploy**
+Push to `master` to deploy to production on Vercel. Push to `dev` or any other branch to get a preview deployment.
 
 ---
 
-## Next milestones (after this scaffold runs)
+## Authentication
 
-1. Worker onboarding flow — admin (you) adds the 100 phone numbers in `supabase/seed.sql`.
-2. Hire flow — `engagement/new` page with rate negotiation.
-3. WhatsApp invite — `/invite` page that opens `https://wa.me/?text=...` with a per-flat referral.
-4. Two-sided ratings (after first settlement).
-5. Migrate from UPI Intent → Razorpay Route once you cross ₹1L/month GMV.
+Login is phone-number OTP only — no passwords to manage. On first login, users are sent through an onboarding flow where they choose their role (resident or worker) and fill in their details. From then on, the app remembers their role and shows the appropriate experience.
