@@ -3,23 +3,32 @@
  * Without this, RSCs eventually see expired sessions and 401s start appearing.
  */
 import { NextResponse, type NextRequest } from 'next/server'
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
+  let supabaseResponse = NextResponse.next({ request: req })
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get:    (n: string) => req.cookies.get(n)?.value,
-        set:    (n: string, v: string, o: CookieOptions) => { res.cookies.set({ name: n, value: v, ...o }) },
-        remove: (n: string, o: CookieOptions) => { res.cookies.set({ name: n, value: '', ...o }) },
+        getAll() {
+          return req.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({ request: req })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
       },
     }
   )
+
   await supabase.auth.getUser()
-  return res
+  return supabaseResponse
 }
 
 export const config = {
