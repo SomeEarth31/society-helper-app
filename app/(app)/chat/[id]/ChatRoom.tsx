@@ -27,6 +27,7 @@ export default function ChatRoom({
   isResident,
   applicationId,
   applicationStatus: initialAppStatus,
+  applicationJobTitle,
   engagementId: initialEngagementId,
   workerId,
   residentId,
@@ -43,6 +44,7 @@ export default function ChatRoom({
   isResident: boolean
   applicationId: string | null
   applicationStatus: string | null
+  applicationJobTitle: string | null
   engagementId: string | null
   workerId: string | null
   residentId: string | null
@@ -142,7 +144,29 @@ export default function ChatRoom({
     })
 
     if (job?.id) {
-      await supabase.from('job_postings').update({ status: 'filled' }).eq('id', job.id)
+      // Fill ALL open postings from this resident for the same specialty
+      const { data: sameSpecialtyJobs } = await supabase
+        .from('job_postings')
+        .select('id')
+        .eq('employer_id', user.id)
+        .eq('specialty', job.specialty)
+        .eq('status', 'open')
+
+      const fillIds = (sameSpecialtyJobs ?? []).map(j => j.id)
+      if (!fillIds.includes(job.id)) fillIds.push(job.id)
+
+      await supabase.from('job_postings')
+        .update({ status: 'filled' })
+        .in('id', fillIds)
+
+      // Delete this worker's pending applications for all those postings
+      if (workerId) {
+        await supabase.from('job_applications')
+          .delete()
+          .eq('worker_id', workerId)
+          .in('job_posting_id', fillIds)
+          .eq('status', 'pending')
+      }
     }
 
     setAppStatus('accepted')
@@ -189,7 +213,8 @@ export default function ChatRoom({
       return
     }
 
-    // Close any matching open job posting from this resident for this specialty
+    // Close matching open job postings from this resident for this specialty
+    // and withdraw the worker's pending applications for those jobs
     if (hireRequestSpecialty) {
       const { data: matchingJobs } = await supabase
         .from('job_postings')
@@ -198,9 +223,18 @@ export default function ChatRoom({
         .eq('specialty', hireRequestSpecialty)
         .eq('status', 'open')
       if (matchingJobs?.length) {
+        const matchingJobIds = matchingJobs.map(j => j.id)
         await supabase.from('job_postings')
           .update({ status: 'filled' })
-          .in('id', matchingJobs.map(j => j.id))
+          .in('id', matchingJobIds)
+        // Remove the worker's pending applications for these jobs
+        if (workerId) {
+          await supabase.from('job_applications')
+            .delete()
+            .eq('worker_id', workerId)
+            .in('job_posting_id', matchingJobIds)
+            .eq('status', 'pending')
+        }
       }
     }
 
@@ -252,6 +286,8 @@ export default function ChatRoom({
   const showInviteSent    = isResident && hireRequestId && hireStatus === 'pending'
   // Worker: show accept/decline for pending hire requests
   const showHireActions   = !isResident && hireRequestId && hireStatus === 'pending'
+  // Worker: show "application pending" banner when they've applied to this resident's job
+  const showAppPending    = !isResident && applicationId && appStatus === 'pending'
 
   return (
     <div className="flex flex-col h-screen pb-20 bg-slate-50">
@@ -291,25 +327,32 @@ export default function ChatRoom({
 
       {/* Resident action bar — accept/decline applicant */}
       {showAcceptDecline && (
-        <div className="bg-white border-b border-slate-100 px-4 py-3 flex gap-2 shrink-0">
-          <button
-            onClick={handleDecline}
-            disabled={!!actionLoading}
-            className="flex-1 h-10 rounded-2xl border-2 border-slate-200 text-slate-600 text-sm font-bold flex items-center justify-center gap-1.5 active:scale-95 transition disabled:opacity-40"
-          >
-            {actionLoading === 'decline'
-              ? <Loader2 size={14} className="animate-spin" />
-              : <><XCircle size={14} /> {T.chat.declineHire}</>}
-          </button>
-          <button
-            onClick={handleAccept}
-            disabled={!!actionLoading}
-            className="flex-1 h-10 rounded-2xl bg-emerald-500 text-white text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition disabled:opacity-40"
-          >
-            {actionLoading === 'accept'
-              ? <Loader2 size={14} className="animate-spin" />
-              : <><CheckCircle2 size={14} /> {T.chat.acceptApplicant}</>}
-          </button>
+        <div className="bg-white border-b border-slate-100 px-4 py-3 shrink-0">
+          {applicationJobTitle && (
+            <p className="text-xs font-bold text-slate-500 mb-2">
+              Applied for: <span className="text-slate-800 capitalize">{applicationJobTitle}</span>
+            </p>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={handleDecline}
+              disabled={!!actionLoading}
+              className="flex-1 h-10 rounded-2xl border-2 border-slate-200 text-slate-600 text-sm font-bold flex items-center justify-center gap-1.5 active:scale-95 transition disabled:opacity-40"
+            >
+              {actionLoading === 'decline'
+                ? <Loader2 size={14} className="animate-spin" />
+                : <><XCircle size={14} /> {T.chat.declineHire}</>}
+            </button>
+            <button
+              onClick={handleAccept}
+              disabled={!!actionLoading}
+              className="flex-1 h-10 rounded-2xl bg-emerald-500 text-white text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition disabled:opacity-40"
+            >
+              {actionLoading === 'accept'
+                ? <Loader2 size={14} className="animate-spin" />
+                : <><CheckCircle2 size={14} /> {T.chat.acceptApplicant}</>}
+            </button>
+          </div>
         </div>
       )}
 
@@ -331,12 +374,26 @@ export default function ChatRoom({
         </div>
       )}
 
+      {/* Worker: pending job application banner */}
+      {showAppPending && (
+        <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-3 shrink-0 flex items-center gap-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full shrink-0">Applied</span>
+          <p className="text-xs text-emerald-800">
+            {applicationJobTitle
+              ? `Your ${applicationJobTitle} application is waiting for a response`
+              : 'Your job application is waiting for a response'}
+          </p>
+        </div>
+      )}
+
       {/* Worker action bar — accept/decline hire request */}
       {showHireActions && (
         <div className="bg-amber-50 border-b border-amber-100 px-4 py-3 shrink-0">
           <p className="text-xs font-bold text-amber-700 mb-2">
-            This resident wants to hire you
-            {hireRequestOfferedSalary ? ` · ₹${hireRequestOfferedSalary.toLocaleString('en-IN')}/mo offered` : ''}
+            {hireRequestSpecialty
+              ? `This resident wants to hire you as ${hireRequestSpecialty.replace(/_/g, ' ')}`
+              : 'This resident wants to hire you'}
+            {hireRequestOfferedSalary ? ` · ₹${hireRequestOfferedSalary.toLocaleString('en-IN')}/mo` : ''}
           </p>
           <div className="flex gap-2">
             <button

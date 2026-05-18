@@ -27,17 +27,31 @@ export default function ApplicantActions({
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(null); return }
 
-    // Create or fetch conversation (upsert on resident+worker unique pair)
-    const { data: conv } = await supabase.from('conversations')
-      .upsert({
-        resident_id: user.id,
-        worker_id: workerId,
-        job_application_id: applicationId,
-      }, { onConflict: 'resident_id,worker_id' })
-      .select().single()
+    // Check if conversation already exists, then update or insert
+    const { data: existing } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('resident_id', user.id)
+      .eq('worker_id', workerId)
+      .maybeSingle()
+
+    let convId: string | null = null
+    if (existing) {
+      // Always update job_application_id to this new application
+      await supabase.from('conversations')
+        .update({ job_application_id: applicationId })
+        .eq('id', existing.id)
+      convId = existing.id
+    } else {
+      const { data: conv } = await supabase.from('conversations')
+        .insert({ resident_id: user.id, worker_id: workerId, job_application_id: applicationId })
+        .select('id').single()
+      convId = conv?.id ?? null
+    }
 
     setLoading(null)
-    if (conv) router.push(`/chat/${conv.id}`)
+    if (convId) router.push(`/chat/${convId}`)
+    else router.push('/chat')
   }
 
   async function handleReject() {

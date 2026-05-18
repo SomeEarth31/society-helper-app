@@ -13,9 +13,15 @@ export type HireRequest = {
   resident_id: string
   message: string | null
   offered_salary: number | null
+  specialty: string | null
   status: string
   created_at: string
-  resident: { id: string; full_name: string | null; flat_number: string | null } | null
+  resident: {
+    id: string
+    full_name: string | null
+    flat_number: string | null
+    society: { name: string } | null
+  } | null
 }
 
 export default async function HireRequestsPage() {
@@ -33,8 +39,8 @@ export default async function HireRequestsPage() {
   const { data: requests } = await supabase
     .from('hire_requests')
     .select(`
-      id, resident_id, message, offered_salary, status, created_at,
-      resident:profiles!hire_requests_resident_id_fkey(id, full_name, flat_number)
+      id, resident_id, message, offered_salary, specialty, status, created_at,
+      resident:profiles!hire_requests_resident_id_fkey(id, full_name, flat_number, society:societies(name))
     `)
     .eq('worker_id', workerRow?.id ?? '00000000-0000-0000-0000-000000000000')
     .order('created_at', { ascending: false })

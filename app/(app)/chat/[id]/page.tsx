@@ -43,16 +43,58 @@ export default async function ChatPage({ params }: { params: { id: string } }) {
     .eq('conversation_id', params.id)
     .neq('sender_id', user.id)
 
-  // Fetch application status (resident accepts applicants from chat)
-  const applicationId: string | null = (conv as any).job_application_id ?? null
+  // Fetch the most-relevant job application for this chat.
+  // We independently query for any PENDING application from this worker on
+  // this resident's jobs, so switching jobs doesn't break the accept/decline flow.
+  const workerDbId    = (conv.worker as any)?.id ?? null
+  const convResidentId = (conv as any).resident_id as string
+
+  let applicationId:     string | null = null
   let applicationStatus: string | null = null
-  if (applicationId) {
-    const { data: app } = await supabase
-      .from('job_applications')
-      .select('status')
-      .eq('id', applicationId)
-      .single()
-    applicationStatus = app?.status ?? null
+  let applicationJobTitle: string | null = null
+
+  if (workerDbId && convResidentId) {
+    // Step 1: get all job posting IDs by this resident
+    const { data: residentJobs } = await supabase
+      .from('job_postings')
+      .select('id, specialty, title')
+      .eq('employer_id', convResidentId)
+    const jobMap = new Map((residentJobs ?? []).map(j => [j.id, j]))
+    const jobIds = [...jobMap.keys()]
+
+    if (jobIds.length > 0) {
+      // Step 2: find the newest PENDING application from this worker
+      const { data: pendingApp } = await supabase
+        .from('job_applications')
+        .select('id, status, job_posting_id')
+        .eq('worker_id', workerDbId)
+        .in('job_posting_id', jobIds)
+        .eq('status', 'pending')
+        .order('applied_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (pendingApp) {
+        applicationId     = pendingApp.id
+        applicationStatus = 'pending'
+        const job = jobMap.get(pendingApp.job_posting_id)
+        applicationJobTitle = job?.title ?? job?.specialty?.replace(/_/g, ' ') ?? null
+      }
+    }
+  }
+
+  // Fallback: use conversation's stored application (for accepted/rejected display)
+  if (!applicationId) {
+    const convAppId: string | null = (conv as any).job_application_id ?? null
+    if (convAppId) {
+      const { data: app } = await supabase
+        .from('job_applications')
+        .select('status')
+        .eq('id', convAppId)
+        .single()
+      applicationId     = convAppId
+      applicationStatus = app?.status ?? null
+    }
   }
 
   // Fetch hire request details (worker accepts from chat)
@@ -102,6 +144,7 @@ export default async function ChatPage({ params }: { params: { id: string } }) {
       isResident={isResident}
       applicationId={applicationId}
       applicationStatus={applicationStatus}
+      applicationJobTitle={applicationJobTitle}
       engagementId={engagementId}
       workerId={(conv.worker as any)?.id ?? null}
       residentId={(conv as any).resident_id ?? null}

@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { XCircle, Loader2, IndianRupee, MessageCircle, Home } from 'lucide-react'
+import { XCircle, Loader2, IndianRupee, MessageCircle, Home, Building2 } from 'lucide-react'
 import type { HireRequest } from './page'
 
 export default function HireRequestCard({
@@ -24,18 +24,31 @@ export default function HireRequestCard({
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(null); return }
 
-    // Open or create conversation linked to this hire request
     const residentId = request.resident?.id ?? request.resident_id
-    const { data: conv } = await supabase.from('conversations')
-      .upsert({
-        resident_id:     residentId,
-        worker_id:       workerId,
-        hire_request_id: request.id,
-      }, { onConflict: 'resident_id,worker_id' })
-      .select().single()
+
+    // Check if conversation already exists, then update or insert
+    const { data: existing } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('resident_id', residentId)
+      .eq('worker_id', workerId)
+      .maybeSingle()
+
+    let convId: string | null = null
+    if (existing) {
+      await supabase.from('conversations')
+        .update({ hire_request_id: request.id })
+        .eq('id', existing.id)
+      convId = existing.id
+    } else {
+      const { data: conv } = await supabase.from('conversations')
+        .insert({ resident_id: residentId, worker_id: workerId, hire_request_id: request.id })
+        .select('id').single()
+      convId = conv?.id ?? null
+    }
 
     setLoading(null)
-    if (conv) router.push(`/chat/${conv.id}`)
+    if (convId) router.push(`/chat/${convId}`)
     else router.push('/chat')
   }
 
@@ -56,8 +69,13 @@ export default function HireRequestCard({
   }
   const s = statusMap[request.status] ?? statusMap['pending']
 
+  const societyName = request.resident?.society?.name ?? null
+  const specialty   = request.specialty?.replace(/_/g, ' ') ?? null
+
   return (
     <li className="rounded-3xl bg-white border border-slate-100 shadow-sm p-4">
+
+      {/* ── Resident header ── */}
       <div className="flex items-center gap-3 mb-3">
         <div className="h-12 w-12 rounded-2xl bg-violet-100 text-violet-700 flex items-center justify-center text-base font-black shrink-0">
           {initials}
@@ -68,28 +86,50 @@ export default function HireRequestCard({
               {request.resident?.full_name ?? 'Resident'}
             </p>
             {resolved && (
-              <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-full ${s.cls}`}>{s.label}</span>
+              <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-full shrink-0 ${s.cls}`}>
+                {s.label}
+              </span>
             )}
           </div>
-          {request.resident?.flat_number && (
-            <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-              <Home size={11} /> Flat {request.resident.flat_number}
-            </p>
-          )}
-          {request.offered_salary && (
-            <p className="text-xs font-bold text-slate-700 mt-0.5 flex items-center gap-0.5">
-              <IndianRupee size={11} />{request.offered_salary.toLocaleString('en-IN')}/month offered
-            </p>
-          )}
+          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+            {request.resident?.flat_number && (
+              <p className="text-xs text-slate-400 flex items-center gap-1">
+                <Home size={11} /> Flat {request.resident.flat_number}
+              </p>
+            )}
+            {societyName && (
+              <p className="text-xs text-slate-400 flex items-center gap-1">
+                <Building2 size={11} /> {societyName}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
+      {/* ── Specialty / job type badge ── */}
+      {specialty && (
+        <div className="mb-2.5">
+          <span className="inline-flex items-center text-[11px] font-bold uppercase tracking-widest text-violet-700 bg-violet-50 border border-violet-100 px-2.5 py-1 rounded-full capitalize">
+            {specialty}
+          </span>
+        </div>
+      )}
+
+      {/* ── Description / message ── */}
       {request.message && (
         <div className="mb-3 rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3">
           <p className="text-xs text-slate-600 leading-relaxed">"{request.message}"</p>
         </div>
       )}
 
+      {/* ── Offered salary ── */}
+      {request.offered_salary && (
+        <p className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-0.5">
+          <IndianRupee size={11} />{request.offered_salary.toLocaleString('en-IN')}/month offered
+        </p>
+      )}
+
+      {/* ── Actions ── */}
       {!resolved && (
         <div className="flex gap-2">
           <button onClick={handleDecline} disabled={!!loading}
