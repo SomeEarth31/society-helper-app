@@ -108,6 +108,22 @@ export default async function DirectoryPage() {
   /* ── RESIDENT: worker directory ── */
   const residentSocietyId = profile?.society_id ?? null
 
+  // Pending hire requests this resident has already sent
+  const { data: pendingHires } = await supabase
+    .from('hire_requests')
+    .select('worker_id')
+    .eq('resident_id', user.id)
+    .eq('status', 'pending')
+  const pendingHireWorkerIds = new Set<string>((pendingHires ?? []).map(h => h.worker_id))
+
+  // Workers this resident currently has active engagements with
+  const { data: activeEngs } = await supabase
+    .from('engagements')
+    .select('worker_id')
+    .eq('employer_id', user.id)
+    .eq('status', 'active')
+  const activeWorkerIds = new Set<string>((activeEngs ?? []).map(e => e.worker_id))
+
   // Fetch all active workers; RLS now allows all authenticated users to see all workers.
   const { data: workers } = await supabase
     .from('workers')
@@ -145,6 +161,8 @@ export default async function DirectoryPage() {
           workers={allWorkers}
           residentSocietyId={residentSocietyId}
           workerSocietyMap={workerSocietyMap}
+          pendingHireWorkerIds={[...pendingHireWorkerIds]}
+          activeWorkerIds={[...activeWorkerIds]}
         />
       </section>
     </main>

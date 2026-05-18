@@ -4,11 +4,11 @@
  * Optimistic UI + Supabase upsert/delete.
  */
 import { useOptimistic, useTransition } from 'react'
-import { Check, X, RotateCcw } from 'lucide-react'
+import { Check, X, RotateCcw, Minus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
-type Status = 'present' | 'absent' | null
+type Status = 'present' | 'half_day' | 'absent' | null
 
 export default function AttendanceToggle({
   engagementId, date, initial,
@@ -45,6 +45,13 @@ export default function AttendanceToggle({
         label="Present"
         activeClass="bg-emerald-500 text-white shadow-sm"
         icon={<Check size={13} strokeWidth={2.5} />}
+      />
+      <ToggleBtn
+        active={optimistic === 'half_day'}
+        onClick={() => mark(optimistic === 'half_day' ? null : 'half_day')}
+        label="Half Day"
+        activeClass="bg-amber-400 text-white shadow-sm"
+        icon={<Minus size={13} strokeWidth={2.5} />}
       />
       <ToggleBtn
         active={optimistic === 'absent'}

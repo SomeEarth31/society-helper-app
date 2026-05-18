@@ -1,13 +1,10 @@
 'use client'
 /**
- * HelperEngagementCard — resident "My Helpers" card with per-role attendance accordion.
- * Each engagement (role) is collapsible; shows the full-month attendance calendar.
+ * HelperEngagementCard — resident "My Helpers" card.
+ * Each role shows as a compact row linking to /engagements/[id].
  */
-import { useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
-import AttendanceToggle from './AttendanceToggle'
-import PaymentButton from './PaymentButton'
-import EndEngagementButton from './EndEngagementButton'
+import Link from 'next/link'
+import { ArrowRight, IndianRupee } from 'lucide-react'
 import { RateWorkerButton } from './RateButtons'
 import { computeDues } from '@/lib/upi'
 
@@ -37,21 +34,14 @@ export default function HelperEngagementCard({
   workerId, workerName, workerPhotoUrl, workerTrustScore,
   reviewCount, engagements, daysInMonth, todayStr, startStr, endStr, userId,
 }: Props) {
-  // Default: expanded if only one engagement, collapsed if multiple
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(engagements.map(e => [e.id, engagements.length === 1]))
-  )
-  const toggle = (id: string) => setExpanded(p => ({ ...p, [id]: !p[id] }))
-
   const initials = workerName.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase()
 
-  // Compute per-engagement stats from attendance
+  // Compute per-engagement stats
   const stats = engagements.map(e => {
-    const att = e.attendance
-    const daysWorked = att.reduce((s, a) => s + (a.status === 'present' ? 1 : a.status === 'half_day' ? 0.5 : 0), 0)
-    const todayStatus = att.find(a => a.date === todayStr)?.status as 'present' | 'absent' | null ?? null
+    const daysWorked = e.attendance.reduce((s, a) =>
+      s + (a.status === 'present' ? 1 : a.status === 'half_day' ? 0.5 : 0), 0)
     const dues = computeDues(e.monthly_salary, daysWorked, daysInMonth)
-    return { daysWorked, todayStatus, dues }
+    return { daysWorked, dues }
   })
 
   const totalDues = stats.reduce((s, st) => s + st.dues, 0)
@@ -81,70 +71,31 @@ export default function HelperEngagementCard({
         {engagements.length > 1 && (
           <div className="text-right shrink-0">
             <p className="text-[10px] text-slate-400">Total owed</p>
-            <p className="text-sm font-black text-slate-900">₹{totalDues.toLocaleString('en-IN')}</p>
+            <p className="text-sm font-black text-slate-900 flex items-center gap-0.5 justify-end">
+              <IndianRupee size={11} />{totalDues.toLocaleString('en-IN')}
+            </p>
           </div>
         )}
       </div>
 
-      {/* ── Per-engagement accordion sections ── */}
+      {/* ── Per-engagement rows ── */}
       {engagements.map((e, idx) => {
-        const { daysWorked, todayStatus, dues } = stats[idx]
-        const role   = (e.service_type ?? e.workerSpecialty).replace(/_/g, ' ')
-        const isOpen = expanded[e.id]
-
+        const { daysWorked, dues } = stats[idx]
+        const role = (e.service_type ?? e.workerSpecialty).replace(/_/g, ' ')
         return (
-          <div key={e.id} className={`border-t ${idx === 0 ? 'border-slate-100' : 'border-slate-200'}`}>
-            {/* Accordion toggle row */}
-            <button
-              onClick={() => toggle(e.id)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 active:opacity-70"
-            >
-              <div className="flex items-center gap-2 flex-wrap">
-                {engagements.length > 1 && (
-                  <span className="text-[11px] font-bold uppercase tracking-widest text-violet-500 capitalize">{role}</span>
-                )}
-                <span className="text-xs text-slate-500">
-                  {daysWorked} / {daysInMonth} days · ₹{dues.toLocaleString('en-IN')}
-                </span>
-              </div>
-              {isOpen
-                ? <ChevronUp size={15} className="text-slate-400 shrink-0" />
-                : <ChevronDown size={15} className="text-slate-400 shrink-0" />
-              }
-            </button>
-
-            {/* Expanded body */}
-            {isOpen && (
-              <div className="px-4 py-4 bg-slate-50 space-y-4">
-                {/* Month attendance calendar */}
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
-                    {new Date(startStr + 'T00:00:00').toLocaleString('en-IN', { month: 'long', year: 'numeric' })} attendance
-                  </p>
-                  <MonthCalendar attendance={e.attendance} startStr={startStr} daysInMonth={daysInMonth} todayStr={todayStr} />
-                </div>
-
-                {/* Today's attendance toggle */}
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1.5">Today</p>
-                  <AttendanceToggle engagementId={e.id} date={todayStr} initial={todayStatus} />
-                </div>
-
-                {/* Payment */}
-                <PaymentButton
-                  engagementId={e.id}
-                  amount={dues}
-                  daysWorked={daysWorked}
-                  periodStart={startStr}
-                  periodEnd={endStr}
-                  workerName={workerName}
-                />
-
-                {/* End engagement */}
-                <EndEngagementButton engagementId={e.id} role="resident" otherName={workerName} />
-              </div>
-            )}
-          </div>
+          <Link
+            key={e.id}
+            href={`/engagements/${e.id}`}
+            className={`flex items-center justify-between px-4 py-3 border-t ${idx === 0 ? 'border-slate-100' : 'border-slate-200'} bg-slate-50 active:opacity-70`}
+          >
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-violet-600 capitalize shrink-0">{role}</span>
+              <span className="text-xs text-slate-500">
+                {daysWorked} / {daysInMonth} days · <span className="font-bold text-slate-700">₹{dues.toLocaleString('en-IN')}</span>
+              </span>
+            </div>
+            <ArrowRight size={15} className="text-slate-400 shrink-0 ml-2" />
+          </Link>
         )
       })}
 
@@ -160,55 +111,5 @@ export default function HelperEngagementCard({
         />
       </div>
     </li>
-  )
-}
-
-// ── Month attendance read-only calendar ────────────────────────────────────
-function MonthCalendar({ attendance, startStr, daysInMonth, todayStr }: {
-  attendance: { date: string; status: string }[]
-  startStr: string
-  daysInMonth: number
-  todayStr: string
-}) {
-  const attMap    = new Map(attendance.map(a => [a.date, a.status]))
-  const startDow  = new Date(startStr + 'T00:00:00').getDay() // 0 = Sun
-  const prefix    = startStr.slice(0, 7) // "YYYY-MM"
-
-  const cells = Array.from({ length: daysInMonth }, (_, i) => {
-    const d       = i + 1
-    const dateStr = `${prefix}-${String(d).padStart(2, '0')}`
-    const status  = attMap.get(dateStr)
-    return { d, dateStr, status, isPast: dateStr <= todayStr, isToday: dateStr === todayStr }
-  })
-
-  return (
-    <div>
-      <div className="grid grid-cols-7 gap-1 mb-1">
-        {['S','M','T','W','T','F','S'].map((l, i) => (
-          <span key={i} className="text-[9px] font-bold text-slate-400 text-center">{l}</span>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {Array.from({ length: startDow }).map((_, i) => <div key={`pad-${i}`} />)}
-        {cells.map(({ d, status, isPast, isToday }) => {
-          const cls =
-            status === 'present'  ? 'bg-emerald-400 text-white' :
-            status === 'half_day' ? 'bg-amber-400 text-white' :
-            status === 'absent'   ? 'bg-rose-400 text-white' :
-            isPast                ? 'bg-slate-200 text-slate-400' :
-                                    'bg-slate-100 text-slate-300'
-          return (
-            <div key={d} className={`h-7 rounded flex items-center justify-center text-[10px] font-bold ${cls} ${isToday ? 'ring-2 ring-violet-500' : ''}`}>
-              {d}
-            </div>
-          )
-        })}
-      </div>
-      <div className="mt-2 flex gap-3 text-[10px] text-slate-500 flex-wrap">
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-400 inline-block" /> Present</span>
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400 inline-block" /> Half day</span>
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-400 inline-block" /> Absent</span>
-      </div>
-    </div>
   )
 }

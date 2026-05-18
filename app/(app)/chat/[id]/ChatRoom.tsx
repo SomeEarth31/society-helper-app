@@ -63,6 +63,7 @@ export default function ChatRoom({
   const [appStatus,     setAppStatus]     = useState(initialAppStatus)
   const [hireStatus,    setHireStatus]    = useState(initialHireStatus)
   const [actionLoading, setActionLoading] = useState<'accept' | 'decline' | 'accept_hire' | 'decline_hire' | null>(null)
+  const [actionError,   setActionError]   = useState<string | null>(null)
 
   // Refresh nav badge when chat opens
   useEffect(() => { router.refresh() }, [])
@@ -165,12 +166,14 @@ export default function ChatRoom({
   async function handleAcceptHire() {
     if (!hireRequestId || !workerId || !residentId) return
     setActionLoading('accept_hire')
+    setActionError(null)
 
-    await supabase.from('hire_requests')
+    const { error: hrErr } = await supabase.from('hire_requests')
       .update({ status: 'accepted', resolved_at: new Date().toISOString() })
       .eq('id', hireRequestId)
+    if (hrErr) { setActionError('Could not update hire request. Try again.'); setActionLoading(null); return }
 
-    await supabase.from('engagements').insert({
+    const { error: engErr } = await supabase.from('engagements').insert({
       employer_id:     residentId,
       worker_id:       workerId,
       hire_request_id: hireRequestId,
@@ -178,6 +181,13 @@ export default function ChatRoom({
       service_type:    hireRequestSpecialty ?? null,
       status:          'active',
     })
+    if (engErr) {
+      // Roll back hire_request status so worker can try again
+      await supabase.from('hire_requests').update({ status: 'pending', resolved_at: null }).eq('id', hireRequestId)
+      setActionError('Could not create engagement. It may already exist for this role.')
+      setActionLoading(null)
+      return
+    }
 
     // Close any matching open job posting from this resident for this specialty
     if (hireRequestSpecialty) {
@@ -238,6 +248,8 @@ export default function ChatRoom({
 
   // Resident: show accept/decline for pending applicants
   const showAcceptDecline = isResident && applicationId && appStatus === 'pending'
+  // Resident: show "invitation sent" status for pending hire requests they sent
+  const showInviteSent    = isResident && hireRequestId && hireStatus === 'pending'
   // Worker: show accept/decline for pending hire requests
   const showHireActions   = !isResident && hireRequestId && hireStatus === 'pending'
 
@@ -270,6 +282,11 @@ export default function ChatRoom({
             {T.chat.hired}
           </span>
         )}
+        {hireStatus === 'declined' && (
+          <span className="text-[10px] font-bold bg-red-50 text-red-600 border border-red-200 px-2 py-1 rounded-full shrink-0">
+            Declined
+          </span>
+        )}
       </header>
 
       {/* Resident action bar — accept/decline applicant */}
@@ -293,6 +310,24 @@ export default function ChatRoom({
               ? <Loader2 size={14} className="animate-spin" />
               : <><CheckCircle2 size={14} /> {T.chat.acceptApplicant}</>}
           </button>
+        </div>
+      )}
+
+      {/* Resident: invitation sent banner */}
+      {showInviteSent && (
+        <div className="bg-violet-50 border-b border-violet-100 px-4 py-3 shrink-0 flex items-center gap-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-violet-500 bg-violet-100 px-2 py-0.5 rounded-full">Invitation Sent</span>
+          <p className="text-xs text-violet-700">
+            Waiting for {otherName} to accept
+            {hireRequestOfferedSalary ? ` · ₹${hireRequestOfferedSalary.toLocaleString('en-IN')}/mo` : ''}
+          </p>
+        </div>
+      )}
+
+      {/* Action error */}
+      {actionError && (
+        <div className="bg-red-50 border-b border-red-100 px-4 py-2.5 shrink-0">
+          <p className="text-xs font-bold text-red-600">{actionError}</p>
         </div>
       )}
 

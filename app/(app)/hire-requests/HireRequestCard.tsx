@@ -25,9 +25,10 @@ export default function HireRequestCard({
     if (!user) { setLoading(null); return }
 
     // Open or create conversation linked to this hire request
+    const residentId = request.resident?.id ?? request.resident_id
     const { data: conv } = await supabase.from('conversations')
       .upsert({
-        resident_id:     request.resident!.id,
+        resident_id:     residentId,
         worker_id:       workerId,
         hire_request_id: request.id,
       }, { onConflict: 'resident_id,worker_id' })

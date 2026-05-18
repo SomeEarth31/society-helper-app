@@ -4,7 +4,7 @@
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createServerClient } from '@/lib/supabase/server'
-import { ArrowLeft, Star, IndianRupee, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { ArrowLeft, Star, IndianRupee, CheckCircle2, XCircle, Clock, Briefcase } from 'lucide-react'
 import ApplicantActions from './ApplicantActions'
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +16,7 @@ export default async function ApplicantsPage({ params }: { params: { id: string 
 
   const { data: job } = await supabase
     .from('job_postings')
-    .select('id, title, specialty, status, employer_id')
+    .select('id, title, specialty, status, employer_id, offered_salary, description, schedule')
     .eq('id', params.id)
     .single()
 
@@ -41,7 +41,35 @@ export default async function ApplicantsPage({ params }: { params: { id: string 
         <p className="text-xs text-slate-400 mt-0.5">{(applications ?? []).length} applicant{(applications ?? []).length !== 1 ? 's' : ''}</p>
       </header>
 
-      <div className="px-5 mt-5">
+      {/* Job details banner */}
+      <div className="px-5 mt-4">
+        <div className="rounded-3xl bg-white border border-slate-100 shadow-sm p-4 flex items-start gap-3 mb-5">
+          <div className="h-10 w-10 rounded-2xl bg-violet-50 flex items-center justify-center shrink-0">
+            <Briefcase size={16} className="text-violet-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-slate-900 text-[15px] truncate">{job.title}</p>
+            <p className="text-xs text-slate-400 capitalize mt-0.5">{(job.specialty ?? '').replace(/_/g, ' ')}</p>
+            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+              {job.offered_salary != null && (
+                <span className="flex items-center gap-0.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                  <IndianRupee size={10} />{job.offered_salary.toLocaleString('en-IN')}/mo
+                </span>
+              )}
+              {job.schedule && (
+                <span className="text-xs text-slate-500 flex items-center gap-1">
+                  <Clock size={11} /> {job.schedule}
+                </span>
+              )}
+            </div>
+            {job.description && (
+              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed line-clamp-2">{job.description}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="px-5">
         {(!applications || applications.length === 0) ? (
           <div className="rounded-3xl border-2 border-dashed border-slate-200 bg-white p-10 text-center">
             <Clock size={28} className="text-slate-300 mx-auto mb-3" />

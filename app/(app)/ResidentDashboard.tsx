@@ -51,13 +51,14 @@ export default async function ResidentDashboard({
 
   const engIds = (engagements ?? []).map(e => e.id)
   const today  = new Date()
-  const mStart = new Date(today.getFullYear(), today.getMonth(), 1)
-  const mEnd   = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-  const todayStr = today.toISOString().slice(0, 10)
-  const startStr = mStart.toISOString().slice(0, 10)
-  const endStr   = mEnd.toISOString().slice(0, 10)
-  const daysInMonth = mEnd.getDate()
-  const monthLabel  = mStart.toLocaleString('en-IN', { month: 'long', year: 'numeric' })
+  const yr = today.getFullYear()
+  const mo = today.getMonth() // 0-indexed
+  // Use local date strings to avoid UTC/IST timezone shift
+  const todayStr = `${yr}-${String(mo + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const startStr = `${yr}-${String(mo + 1).padStart(2, '0')}-01`
+  const daysInMonth = new Date(yr, mo + 1, 0).getDate()
+  const endStr   = `${yr}-${String(mo + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
+  const monthLabel  = new Date(yr, mo, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })
 
   let attendance: AttendanceRow[] = []
   if (engIds.length) {

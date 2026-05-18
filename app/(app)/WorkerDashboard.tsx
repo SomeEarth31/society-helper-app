@@ -59,14 +59,16 @@ export default async function WorkerDashboard({
     .eq('status', 'active')
     .returns<EngagementRow[]>()
 
-  const now        = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const mEnd       = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  const startIso   = monthStart.toISOString()
-  const startStr   = startIso.slice(0, 10)
-  const todayStr   = now.toISOString().slice(0, 10)
-  const daysInMonth = mEnd.getDate()
-  const monthLabel = monthStart.toLocaleString('en-IN', { month: 'long', year: 'numeric' })
+  const now  = new Date()
+  const yr   = now.getFullYear()
+  const mo   = now.getMonth() // 0-indexed
+  // Local date strings avoid UTC/IST timezone shift (midnight local ≠ midnight UTC)
+  const todayStr    = `${yr}-${String(mo + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const startStr    = `${yr}-${String(mo + 1).padStart(2, '0')}-01`
+  const daysInMonth = new Date(yr, mo + 1, 0).getDate()
+  const monthLabel  = new Date(yr, mo, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })
+  // For payment query (needs ISO string)
+  const startIso = new Date(yr, mo, 1).toISOString()
 
   const engIds = (engagements ?? []).map(e => e.id)
   let monthEarnings = 0
@@ -89,7 +91,7 @@ export default async function WorkerDashboard({
       .from('attendance')
       .select('engagement_id, date, status')
       .in('engagement_id', engIds)
-      .gte('date', startIso.slice(0, 10))
+      .gte('date', startStr)
     attendance = attData ?? []
   }
 

@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic'
 
 export type HireRequest = {
   id: string
+  resident_id: string
   message: string | null
   offered_salary: number | null
   status: string
@@ -32,7 +33,7 @@ export default async function HireRequestsPage() {
   const { data: requests } = await supabase
     .from('hire_requests')
     .select(`
-      id, message, offered_salary, status, created_at,
+      id, resident_id, message, offered_salary, status, created_at,
       resident:profiles!hire_requests_resident_id_fkey(id, full_name, flat_number)
     `)
     .eq('worker_id', workerRow?.id ?? '00000000-0000-0000-0000-000000000000')

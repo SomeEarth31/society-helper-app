@@ -92,7 +92,7 @@ create table engagements (
   hire_request_id    uuid,
   job_application_id uuid,
   created_at     timestamptz default now(),
-  unique (employer_id, worker_id, start_date)
+  unique (employer_id, worker_id, service_type, start_date)
 );
 create index idx_eng_employer on engagements(employer_id);
 create index idx_eng_worker   on engagements(worker_id);
@@ -459,6 +459,17 @@ create policy "profiles_engagement_employer_read" on profiles
     )
   );
 
+-- Workers can read profiles of residents who have sent them a hire request.
+create policy "profiles_hire_request_resident_read" on profiles
+  for select to authenticated
+  using (
+    id in (
+      select hr.resident_id from hire_requests hr
+      join workers w on w.id = hr.worker_id
+      where w.auth_id = auth.uid()
+    )
+  );
+
 -- Workers can read profiles of residents they share a conversation with (chat display).
 -- Uses a SECURITY DEFINER helper so the workers/conversations lookup does NOT re-enter
 -- the workers RLS chain (which would query profiles and recurse).
@@ -507,6 +518,11 @@ create policy "engagements_employer_all" on engagements
   with check (auth.uid() = employer_id);
 create policy "engagements_worker_read" on engagements
   for select using (
+    worker_id in (select id from workers where auth_id = auth.uid())
+  );
+create policy "engagements_worker_insert" on engagements
+  for insert
+  with check (
     worker_id in (select id from workers where auth_id = auth.uid())
   );
 

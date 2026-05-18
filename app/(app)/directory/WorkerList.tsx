@@ -21,16 +21,23 @@ export default function WorkerList({
   workers,
   residentSocietyId,
   workerSocietyMap,
+  pendingHireWorkerIds = [],
+  activeWorkerIds = [],
 }: {
   workers: WorkerRow[]
   residentSocietyId: string | null
   workerSocietyMap: Record<string, string[]>
+  pendingHireWorkerIds?: string[]
+  activeWorkerIds?: string[]
 }) {
   const router   = useRouter()
   const { T }    = useLanguage()
   const [q, setQ]                     = useState('')
   const [filter, setFilter]           = useState<Filter>('all')
   const [showOtherSocieties, setShowOtherSocieties] = useState(false)
+
+  const pendingSet = useMemo(() => new Set(pendingHireWorkerIds), [pendingHireWorkerIds])
+  const activeSet  = useMemo(() => new Set(activeWorkerIds),      [activeWorkerIds])
 
   // Partition workers: "my society" (in-society or visible-to-all) vs "other society"
   const { myWorkers, otherWorkers } = useMemo(() => {
@@ -56,8 +63,17 @@ export default function WorkerList({
     })
   }
 
-  const filteredMy    = useMemo(() => applySearchFilter(myWorkers),    [myWorkers, q, filter])
-  const filteredOther = useMemo(() => applySearchFilter(otherWorkers), [otherWorkers, q, filter])
+  // Sort: active-hired workers sink to the bottom
+  function sortByHireStatus(list: WorkerRow[]) {
+    return [...list].sort((a, b) => {
+      const aHired = activeSet.has(a.id) ? 1 : 0
+      const bHired = activeSet.has(b.id) ? 1 : 0
+      return aHired - bHired
+    })
+  }
+
+  const filteredMy    = useMemo(() => sortByHireStatus(applySearchFilter(myWorkers)),    [myWorkers, q, filter, activeSet])
+  const filteredOther = useMemo(() => sortByHireStatus(applySearchFilter(otherWorkers)), [otherWorkers, q, filter, activeSet])
 
   return (
     <div className="flex flex-col gap-4">
@@ -95,7 +111,7 @@ export default function WorkerList({
         <>
           <ul className="space-y-3">
             {filteredMy.map(w => (
-              <WorkerCard key={w.id} w={w} />
+              <WorkerCard key={w.id} w={w} isPending={pendingSet.has(w.id)} isActive={activeSet.has(w.id)} />
             ))}
           </ul>
 
@@ -115,7 +131,7 @@ export default function WorkerList({
               {showOtherSocieties && (
                 <ul className="space-y-3 opacity-80">
                   {filteredOther.map(w => (
-                    <WorkerCard key={w.id} w={w} />
+                    <WorkerCard key={w.id} w={w} isPending={pendingSet.has(w.id)} isActive={activeSet.has(w.id)} />
                   ))}
                 </ul>
               )}
@@ -127,10 +143,10 @@ export default function WorkerList({
   )
 }
 
-function WorkerCard({ w }: { w: WorkerRow }) {
+function WorkerCard({ w, isPending, isActive }: { w: WorkerRow; isPending: boolean; isActive: boolean }) {
   const { T } = useLanguage()
   return (
-    <li className="rounded-3xl bg-white border border-slate-100 shadow-sm p-4">
+    <li className={`rounded-3xl bg-white border border-slate-100 shadow-sm p-4 ${isActive ? 'opacity-70' : ''}`}>
       <div className="flex items-center gap-3.5">
         <WorkerAvatar name={w.full_name} />
         <div className="flex-1 min-w-0">
@@ -158,12 +174,22 @@ function WorkerCard({ w }: { w: WorkerRow }) {
       </div>
 
       <div className="mt-3.5 pt-3.5 border-t border-slate-100">
-        <Link
-          href={`/directory/${w.id}`}
-          className="w-full h-11 inline-flex items-center justify-center gap-1.5 rounded-2xl bg-violet-600 text-sm font-bold text-white shadow-md shadow-violet-200 active:scale-[0.97] transition"
-        >
-          <UserPlus size={14} /> {T.common.hire}
-        </Link>
+        {isActive ? (
+          <div className="w-full h-11 inline-flex items-center justify-center gap-1.5 rounded-2xl bg-slate-100 text-sm font-bold text-slate-400 cursor-default select-none">
+            ✓ Currently hired
+          </div>
+        ) : isPending ? (
+          <div className="w-full h-11 inline-flex items-center justify-center gap-1.5 rounded-2xl bg-violet-50 border border-violet-100 text-sm font-bold text-violet-400 cursor-default select-none">
+            Request sent
+          </div>
+        ) : (
+          <Link
+            href={`/directory/${w.id}`}
+            className="w-full h-11 inline-flex items-center justify-center gap-1.5 rounded-2xl bg-violet-600 text-sm font-bold text-white shadow-md shadow-violet-200 active:scale-[0.97] transition"
+          >
+            <UserPlus size={14} /> {T.common.hire}
+          </Link>
+        )}
       </div>
     </li>
   )
