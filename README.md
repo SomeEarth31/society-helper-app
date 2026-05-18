@@ -1,3 +1,5 @@
+<div align="right"><a href="README.html">📄 View styled version</a></div>
+
 <div align="center">
 
 <img src="public/icon-192.png" alt="Society Helper" width="80" />
