@@ -20,6 +20,10 @@ export const metadata: Metadata = {
   title: 'Society Helper',
   description: 'Find, hire, and pay verified domestic help in your society.',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Society Helper' },
 }
 
