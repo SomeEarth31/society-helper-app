@@ -1,4 +1,4 @@
-<div align="right"><a href="README.html">📄 View styled version</a></div>
+<div align="right"><a href="https://society-helper-app.vercel.app/README.html" target="_blank">📄 View styled version</a></div>
 
 <div align="center">
 
