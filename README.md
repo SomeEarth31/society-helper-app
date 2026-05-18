@@ -1,8 +1,5 @@
-<div align="right"><a href="https://society-helper-app.vercel.app/README.html" target="_blank">📄 View styled version</a></div>
-
 <div align="center">
 
-<img src="public/icon-192.png" alt="Society Helper" width="80" />
 
 # Society Helper
 
