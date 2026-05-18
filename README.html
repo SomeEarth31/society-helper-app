@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Society Helper — README</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f13;
+    --surface: #16161d;
+    --surface2: #1e1e28;
+    --border: #2a2a38;
+    --violet: #7c3aed;
+    --violet-light: #a78bfa;
+    --violet-dim: #1e1530;
+    --emerald: #10b981;
+    --emerald-dim: #0d2d22;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --text: #e2e2ef;
+    --muted: #6b6b8a;
+    --code-bg: #1a1a24;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+
+  /* ── Layout ── */
+  .wrapper { max-width: 900px; margin: 0 auto; padding: 48px 24px 96px; }
+
+  /* ── Hero ── */
+  .hero {
+    text-align: center;
+    padding: 72px 0 56px;
+    position: relative;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 60% 50% at 50% 0%, #7c3aed22 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .badge {
+    display: inline-block;
+    background: var(--violet-dim);
+    color: var(--violet-light);
+    border: 1px solid #4c1d95;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 4px 14px;
+    border-radius: 99px;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: clamp(36px, 6vw, 60px);
+    font-weight: 900;
+    letter-spacing: -.03em;
+    background: linear-gradient(135deg, #fff 30%, var(--violet-light));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 16px;
+  }
+  .hero p {
+    color: var(--muted);
+    font-size: 17px;
+    max-width: 520px;
+    margin: 0 auto 28px;
+  }
+  .stack-pills { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .pill {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 8px;
+  }
+  .pill span { color: var(--text); }
+
+  /* ── Section headings ── */
+  .section { margin-top: 64px; }
+  .section-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--violet-light);
+    margin-bottom: 10px;
+  }
+  h2 {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    color: #fff;
+    margin-bottom: 16px;
+  }
+  h3 {
+    font-size: 17px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 10px;
+    margin-top: 28px;
+  }
+  p { color: #a0a0bf; margin-bottom: 14px; }
+
+  /* ── What is it ── */
+  .intro-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 32px;
+    font-size: 16px;
+    color: #c8c8e0;
+    line-height: 1.75;
+  }
+  .intro-card strong { color: #fff; }
+
+  /* ── Role cards ── */
+  .role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px; }
+  @media (max-width: 640px) { .role-grid { grid-template-columns: 1fr; } }
+  .role-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+  }
+  .role-card.resident { border-top: 3px solid var(--violet); }
+  .role-card.worker   { border-top: 3px solid var(--emerald); }
+  .role-icon {
+    font-size: 28px;
+    margin-bottom: 12px;
+  }
+  .role-card h3 { margin-top: 0; font-size: 18px; }
+  .feature-list { list-style: none; margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .feature-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 14px;
+    color: #a0a0bf;
+  }
+  .feature-list li::before {
+    content: "›";
+    color: var(--violet-light);
+    font-weight: 800;
+    font-size: 16px;
+    line-height: 1.4;
+    flex-shrink: 0;
+  }
+  .role-card.worker .feature-list li::before { color: var(--emerald); }
+
+  /* ── Pages table ── */
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    margin-top: 8px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th {
+    background: var(--surface2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  td:first-child { font-family: "SF Mono", "Fira Code", monospace; font-size: 12px; color: var(--violet-light); white-space: nowrap; }
+  td:not(:first-child) { color: #a0a0bf; }
+  .dot { color: var(--muted); }
+
+  /* ── File tree ── */
+  .tree-wrap {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px 28px;
+    overflow-x: auto;
+    margin-top: 8px;
+  }
+  .tree {
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 13px;
+    line-height: 2;
+    color: #a0a0bf;
+    white-space: pre;
+  }
+  .tree .dir  { color: var(--violet-light); font-weight: 700; }
+  .tree .file { color: #c8c8e0; }
+  .tree .comment { color: var(--muted); }
+
+  /* ── Setup steps ── */
+  .steps { display: flex; flex-direction: column; gap: 16px; margin-top: 8px; }
+  .step {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 22px;
+  }
+  .step-num {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: var(--violet-dim);
+    border: 1px solid #4c1d95;
+    color: var(--violet-light);
+    font-weight: 800;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .step-body h4 { color: #fff; font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .step-body p  { color: var(--muted); font-size: 13.5px; margin: 0; }
+  .step-body code {
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 12px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    color: var(--violet-light);
+    padding: 2px 6px;
+    border-radius: 5px;
+  }
+
+  /* ── Code block ── */
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 22px;
+    overflow-x: auto;
+    margin: 12px 0;
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 13px;
+    line-height: 1.75;
+    color: #a0a0bf;
+  }
+  pre .key   { color: var(--violet-light); }
+  pre .val   { color: #86efac; }
+  pre .cmt   { color: var(--muted); }
+
+  /* ── Auth section ── */
+  .auth-card {
+    background: linear-gradient(135deg, var(--surface) 0%, #1a1030 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 32px;
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    margin-top: 8px;
+  }
+  .auth-icon {
+    font-size: 36px;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .auth-card p { color: #a0a0bf; margin: 0; font-size: 15px; line-height: 1.75; }
+  .auth-card p strong { color: #fff; }
+
+  /* ── Footer ── */
+  footer {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  footer a { color: var(--violet-light); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="badge">PWA · No App Store · WhatsApp Distribution</div>
+    <h1>Society Helper</h1>
+    <p>A mobile-first platform for residential societies to find, hire, and pay domestic workers — directly from a phone browser.</p>
+    <div class="stack-pills">
+      <div class="pill"><span>Next.js 14</span> App Router</div>
+      <div class="pill"><span>Supabase</span> Postgres + Auth + RLS</div>
+      <div class="pill"><span>Tailwind CSS</span></div>
+      <div class="pill"><span>UPI</span> Intent Deep Links</div>
+      <div class="pill"><span>Vercel</span></div>
+    </div>
+  </div>
+
+  <!-- What is it -->
+  <div class="section">
+    <div class="section-label">Overview</div>
+    <h2>What is Society Helper?</h2>
+    <div class="intro-card">
+      Society Helper connects <strong>residents</strong> of a housing society with <strong>domestic workers</strong> — maids, cooks, car washers, caretakers, gardeners, and more. Residents browse available workers, post job listings, track attendance, and pay via UPI. Workers manage their availability, apply for jobs, and track their engagements — all from a phone browser, no installation required.
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <div class="section">
+    <div class="section-label">How It Works</div>
+    <h2>Two sides, one platform</h2>
+    <div class="role-grid">
+
+      <div class="role-card resident">
+        <div class="role-icon">🏠</div>
+        <h3>Residents</h3>
+        <ul class="feature-list">
+          <li>Browse the worker directory filtered by specialty, availability, and trust score</li>
+          <li>Send hire requests directly to workers you want</li>
+          <li>Post job listings and review applicants</li>
+          <li>Mark daily attendance and view monthly calendars</li>
+          <li>See a live dues summary — days worked × daily rate</li>
+          <li>Pay workers via UPI with one tap — GPay, PhonePe, Paytm all supported</li>
+          <li>View full payment history with UTR references</li>
+          <li>Message workers directly in-app</li>
+        </ul>
+      </div>
+
+      <div class="role-card worker">
+        <div class="role-icon">🧑‍🔧</div>
+        <h3>Workers</h3>
+        <ul class="feature-list">
+          <li>Set up a profile with specialty, daily rate, and photo</li>
+          <li>Toggle availability on/off from the dashboard</li>
+          <li>Browse the job board and apply with one tap</li>
+          <li>Accept or decline incoming hire requests</li>
+          <li>View active engagements and attendance history</li>
+          <li>Message residents directly in-app</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Pages -->
+  <div class="section">
+    <div class="section-label">Routes</div>
+    <h2>Key Pages</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Route</th>
+            <th>Resident</th>
+            <th>Worker</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>/</td><td>Dashboard — engagements, attendance, dues</td><td>Dashboard — engagements, hire requests</td></tr>
+          <tr><td>/directory</td><td>Browse available workers</td><td>Browse open job postings</td></tr>
+          <tr><td>/directory/[workerId]</td><td>Worker profile + hire CTA</td><td class="dot">—</td></tr>
+          <tr><td>/jobs</td><td>Manage job postings, view applicants</td><td>Redirects to directory</td></tr>
+          <tr><td>/jobs/new</td><td>Post a new job listing</td><td class="dot">—</td></tr>
+          <tr><td>/hire-requests</td><td class="dot">—</td><td>Pending hire requests</td></tr>
+          <tr><td>/engagement/[id]</td><td>Attendance calendar + pay button</td><td>Attendance calendar</td></tr>
+          <tr><td>/payments</td><td>Full payment history</td><td class="dot">—</td></tr>
+          <tr><td>/chat</td><td>All conversations</td><td>All conversations</td></tr>
+          <tr><td>/notifications</td><td>App notifications</td><td>App notifications</td></tr>
+          <tr><td>/profile</td><td>Edit profile, change password, delete account</td><td>Edit profile, toggle availability</td></tr>
+          <tr><td>/onboarding</td><td colspan="2">First-time setup — name, flat/role, specialty, rate</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- File tree -->
+  <div class="section">
+    <div class="section-label">Project</div>
+    <h2>File Structure</h2>
+    <div class="tree-wrap">
+      <div class="tree"><span class="dir">society-helper-app/</span>
+├── <span class="dir">app/</span>
+│   ├── <span class="file">layout.tsx</span>                      <span class="comment"># Root layout — fonts, PWA meta, Analytics</span>
+│   ├── <span class="file">providers.tsx</span>
+│   ├── <span class="dir">login/</span>
+│   │   └── <span class="file">page.tsx</span>                    <span class="comment"># Phone OTP login</span>
+│   ├── <span class="dir">onboarding/</span>
+│   │   ├── <span class="file">page.tsx</span>
+│   │   └── <span class="file">OnboardingForm.tsx</span>          <span class="comment"># Role-aware first-time setup</span>
+│   └── <span class="dir">(app)/</span>                           <span class="comment"># Auth-gated route group</span>
+│       ├── <span class="file">layout.tsx</span>                  <span class="comment"># Auth guard + bottom nav + badge counts</span>
+│       ├── <span class="file">page.tsx</span>                    <span class="comment"># Dashboard (role-aware)</span>
+│       ├── <span class="file">ResidentDashboard.tsx</span>
+│       ├── <span class="file">WorkerDashboard.tsx</span>
+│       ├── <span class="dir">directory/</span>
+│       │   ├── <span class="file">page.tsx</span>
+│       │   ├── <span class="file">WorkerList.tsx</span>
+│       │   ├── <span class="file">JobBoard.tsx</span>
+│       │   └── <span class="dir">[workerId]/</span>
+│       │       ├── <span class="file">page.tsx</span>             <span class="comment"># Worker profile</span>
+│       │       └── <span class="file">HireForm.tsx</span>
+│       ├── <span class="dir">jobs/</span>
+│       │   ├── <span class="file">page.tsx</span>                <span class="comment"># Resident job postings</span>
+│       │   ├── <span class="dir">new/</span><span class="file">page.tsx</span>
+│       │   └── <span class="dir">[id]/applicants/</span>
+│       │       ├── <span class="file">page.tsx</span>
+│       │       └── <span class="file">ApplicantActions.tsx</span>
+│       ├── <span class="dir">hire-requests/</span>
+│       │   ├── <span class="file">page.tsx</span>
+│       │   └── <span class="file">HireRequestCard.tsx</span>
+│       ├── <span class="dir">engagement/[id]/</span>
+│       │   ├── <span class="file">page.tsx</span>                <span class="comment"># Attendance calendar + pay button</span>
+│       │   ├── <span class="file">AttendanceCalendar.tsx</span>
+│       │   └── <span class="file">actions.ts</span>              <span class="comment"># Server actions</span>
+│       ├── <span class="dir">payments/</span>
+│       │   └── <span class="file">page.tsx</span>
+│       ├── <span class="dir">chat/</span>
+│       │   ├── <span class="file">page.tsx</span>
+│       │   └── <span class="dir">[id]/</span>
+│       │       ├── <span class="file">page.tsx</span>
+│       │       └── <span class="file">ChatRoom.tsx</span>
+│       ├── <span class="dir">notifications/</span>
+│       │   └── <span class="file">page.tsx</span>
+│       └── <span class="dir">profile/</span>
+│           ├── <span class="file">page.tsx</span>
+│           ├── <span class="file">ResidentProfileForm.tsx</span>
+│           ├── <span class="file">AvailabilityToggle.tsx</span>
+│           └── <span class="dir">edit/</span>
+├── <span class="dir">components/</span>
+│   ├── <span class="file">BottomNav.tsx</span>
+│   ├── <span class="file">AttendanceToggle.tsx</span>
+│   ├── <span class="file">PaymentButton.tsx</span>
+│   ├── <span class="file">QuickApplyButton.tsx</span>
+│   ├── <span class="file">DeleteJobButton.tsx</span>
+│   └── <span class="file">EndEngagementButton.tsx</span>
+├── <span class="dir">lib/</span>
+│   ├── <span class="dir">supabase/</span>
+│   │   ├── <span class="file">client.ts</span>               <span class="comment"># Browser client</span>
+│   │   └── <span class="file">server.ts</span>               <span class="comment"># Server client (RSC + actions)</span>
+│   └── <span class="file">upi.ts</span>                      <span class="comment"># UPI deep-link builder</span>
+├── <span class="dir">types/</span>
+│   └── <span class="file">database.ts</span>                 <span class="comment"># Generated Supabase types</span>
+├── <span class="dir">public/</span>
+│   ├── <span class="file">manifest.json</span>               <span class="comment"># PWA manifest</span>
+│   ├── <span class="file">icon-192.png</span>
+│   └── <span class="file">icon-512.png</span>
+├── <span class="file">middleware.ts</span>                   <span class="comment"># Session refresh on every request</span>
+├── <span class="file">next.config.js</span>
+├── <span class="file">tailwind.config.ts</span>
+└── <span class="file">package.json</span></div>
+    </div>
+  </div>
+
+  <!-- Setup -->
+  <div class="section">
+    <div class="section-label">Getting Started</div>
+    <h2>Setup</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h4>Create a Supabase project</h4>
+          <p>Go to supabase.com, create a project, and copy your project URL and anon key.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h4>Run the schema</h4>
+          <p>Open the Supabase SQL editor and paste the contents of <code>supabase/schema.sql</code>. This creates all tables and RLS policies.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h4>Enable Phone auth</h4>
+          <p>Under Authentication → Providers, enable Phone. Supabase provides 30 free SMS/day — switch to Twilio or MSG91 later via the same interface.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h4>Configure redirect URLs</h4>
+          <p>Under Authentication → URL Configuration, set your Site URL and add <code>https://your-app-*.vercel.app/**</code> to Redirect URLs to cover all preview deployments.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <h4>Add environment variables</h4>
+          <p>Create a <code>.env.local</code> file in the project root:</p>
+        </div>
+      </div>
+    </div>
+    <pre><span class="key">NEXT_PUBLIC_SUPABASE_URL</span>=<span class="val">https://your-project.supabase.co</span>
+<span class="key">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>=<span class="val">your-anon-key</span></pre>
+
+    <h3>Run locally</h3>
+    <pre>npm install
+npm run dev</pre>
+
+    <h3>Deploy</h3>
+    <p>Push to <code>master</code> to deploy to production on Vercel. Push to <code>dev</code> or any branch to get an automatic preview deployment.</p>
+  </div>
+
+  <!-- Auth -->
+  <div class="section">
+    <div class="section-label">Authentication</div>
+    <h2>How login works</h2>
+    <div class="auth-card">
+      <div class="auth-icon">📱</div>
+      <p>Login is <strong>phone-number OTP only</strong> — no passwords to manage. On first login, new users go through an onboarding flow to choose their role (resident or worker) and fill in their details. The app remembers their role and shows the appropriate dashboard every time they return. Sessions are refreshed automatically on every request via Next.js middleware, so users stay logged in without interruption.</p>
+    </div>
+  </div>
+
+  <footer>
+    Built with Next.js · Supabase · Tailwind · Vercel
+  </footer>
+
+</div>
+</body>
+</html>
