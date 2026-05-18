@@ -1,53 +1,76 @@
+<div align="center">
+
+<img src="public/icon-192.png" alt="Society Helper" width="80" />
+
 # Society Helper
 
-A mobile-first PWA for residential societies to find, hire, and pay verified domestic help — no app store, no upfront fees, distributed via a WhatsApp link.
+**A mobile-first PWA for residential societies to find, hire, and pay domestic help.**
+No app store. No upfront fees. Distributed via a WhatsApp link.
 
-> **Stack:** Next.js 14 (App Router) · Supabase (Postgres + Auth + RLS) · Tailwind CSS · Lucide React · UPI Intent Deep Links · Vercel
+<br/>
+
+![Next.js](https://img.shields.io/badge/Next.js_14-black?style=for-the-badge&logo=next.js)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
+![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+
+</div>
 
 ---
 
 ## What is Society Helper?
 
-Society Helper connects residents of a housing society with domestic workers — maids, cooks, car washers, caretakers, gardeners, and more. Residents can browse available workers, post jobs, track attendance, and pay directly via UPI. Workers can set their availability, apply for jobs, and manage their engagements — all from their phone.
-
-The app is role-aware: the experience is entirely different depending on whether you log in as a resident or a worker.
+Society Helper connects **residents** of a housing society with **domestic workers** — maids, cooks, car washers, caretakers, gardeners, and more. Residents browse available workers, post jobs, track attendance, and pay directly via UPI. Workers manage their availability, apply for jobs, and view their engagements — all from a phone browser, no installation required.
 
 ---
 
 ## How It Works
 
-### For Residents
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### 🏠 For Residents
 
 **Finding Help**
-Residents land on a directory of all active workers in their society. Each worker card shows their name, specialty, daily rate, trust score, and whether they are currently available. Tapping a worker opens their full profile where you can send a hire request.
+Browse the worker directory filtered by specialty, availability, and trust score. Tap any worker to view their full profile and send a hire request.
 
 **Posting Jobs**
-If you have a specific requirement, you can post a job listing with a title, specialty, description, schedule, and offered salary. Workers in your society can apply, and you'll get notified when they do. From the Jobs page you can review all applicants and accept or reject them.
+Post a job listing with a title, specialty, description, schedule, and offered salary. Workers in your society can apply and you'll be notified instantly.
 
 **Managing Engagements**
-Once you hire a worker, an engagement is created. From the dashboard you can see all your active engagements, mark attendance day by day, and view a full attendance calendar for any given month. The dashboard also shows a dues summary — how much you owe based on days worked and the agreed daily rate.
+Once a worker is hired, mark daily attendance, view a full monthly calendar, and track a live dues summary — days worked × daily rate.
 
 **Paying Workers**
-Payments are made via UPI intent deep links — tapping Pay opens your UPI app (GPay, PhonePe, Paytm, etc.) directly with the worker's VPA and the correct amount pre-filled. All payments are logged with their status and UTR reference in the Payments tab.
+Tap Pay to open your UPI app (GPay, PhonePe, Paytm) with the worker's VPA and amount pre-filled. Every payment is logged with its UTR reference.
 
 **Messaging**
-Residents can message workers directly from the app. The Chat tab shows all your active conversations.
+Chat with workers directly from the app.
 
----
+</td>
+<td width="50%" valign="top">
 
-### For Workers
+### 🧑‍🔧 For Workers
 
 **Profile & Availability**
-Workers set up a profile with their specialty, daily rate, and a photo. An availability toggle on the dashboard lets them flip between available and unavailable — residents only see available workers by default.
+Set up a profile with your specialty, daily rate, and photo. Toggle availability on/off from your dashboard — residents only see available workers.
 
 **Finding Jobs**
-The Directory tab shows workers a job board of all open postings in their society. They can apply with one tap and track the status of their applications.
+Browse the job board of all open postings in your society. Apply with one tap and track the status of each application.
 
 **Hire Requests**
-When a resident sends a hire request, the worker sees it in the Hire Requests tab and can accept or decline.
+When a resident sends a hire request, accept or decline it directly from the app.
 
 **Tracking Work**
-Workers can see their active engagements and the attendance calendar — a useful reference for knowing what they are owed at the end of the month.
+View your active engagements and attendance calendar — a useful reference for knowing what you're owed at end of month.
+
+**Messaging**
+Chat with residents directly from the app.
+
+</td>
+</tr>
+</table>
 
 ---
 
@@ -55,13 +78,13 @@ Workers can see their active engagements and the attendance calendar — a usefu
 
 | Route | Resident | Worker |
 |---|---|---|
-| `/` | Dashboard — active engagements, attendance, dues | Dashboard — active engagements, hire requests |
+| `/` | Dashboard — engagements, attendance, dues | Dashboard — engagements, hire requests |
 | `/directory` | Browse available workers | Browse open job postings |
 | `/directory/[workerId]` | Worker profile + hire CTA | — |
-| `/jobs` | Manage job postings, view applicants | Redirects to directory |
-| `/jobs/new` | Post a new job | — |
+| `/jobs` | Manage job postings, review applicants | Redirects to directory |
+| `/jobs/new` | Post a new job listing | — |
 | `/hire-requests` | — | Pending hire requests |
-| `/engagement/[id]` | Attendance calendar + payment | Attendance calendar |
+| `/engagement/[id]` | Attendance calendar + pay button | Attendance calendar |
 | `/payments` | Full payment history | — |
 | `/chat` | All conversations | All conversations |
 | `/notifications` | App notifications | App notifications |
@@ -71,6 +94,9 @@ Workers can see their active engagements and the attendance calendar — a usefu
 ---
 
 ## File Structure
+
+<details>
+<summary><b>Click to expand</b></summary>
 
 ```
 society-helper-app/
@@ -92,13 +118,12 @@ society-helper-app/
 │       │   ├── page.tsx                    # Worker list (resident) / job board (worker)
 │       │   ├── WorkerList.tsx
 │       │   ├── JobBoard.tsx
-│       │   ├── JobList.tsx
 │       │   └── [workerId]/
 │       │       ├── page.tsx                # Worker profile
 │       │       └── HireForm.tsx
 │       ├── jobs/
 │       │   ├── page.tsx                    # Resident job postings
-│       │   ├── new/page.tsx                # Post a job
+│       │   ├── new/page.tsx
 │       │   └── [id]/applicants/
 │       │       ├── page.tsx
 │       │       └── ApplicantActions.tsx
@@ -109,44 +134,31 @@ society-helper-app/
 │       │   ├── page.tsx                    # Attendance calendar + pay button
 │       │   ├── AttendanceCalendar.tsx
 │       │   └── actions.ts                  # Server actions (mark attendance, settle)
-│       ├── engagements/[id]/
-│       │   └── page.tsx
 │       ├── payments/
-│       │   └── page.tsx                    # Payment history
+│       │   └── page.tsx
 │       ├── chat/
-│       │   ├── page.tsx                    # Conversation list
+│       │   ├── page.tsx
 │       │   └── [id]/
 │       │       ├── page.tsx
 │       │       └── ChatRoom.tsx
 │       ├── notifications/
-│       │   ├── page.tsx
-│       │   └── MarkAllRead.tsx
-│       ├── profile/
-│       │   ├── page.tsx
-│       │   ├── ResidentProfileForm.tsx
-│       │   ├── AvailabilityToggle.tsx
-│       │   ├── LogoutButton.tsx
-│       │   ├── DeleteAccountButton.tsx
-│       │   └── edit/
-│       │       ├── page.tsx
-│       │       └── ResidentEditForm.tsx
-│       ├── worker-profile/
-│       │   ├── page.tsx
-│       │   └── WorkerProfileForm.tsx
-│       └── change-password/
-│           └── page.tsx
-├── auth/
-│   └── callback/
-│       └── route.ts                        # Supabase auth callback
+│       │   └── page.tsx
+│       └── profile/
+│           ├── page.tsx
+│           ├── ResidentProfileForm.tsx
+│           ├── AvailabilityToggle.tsx
+│           ├── LogoutButton.tsx
+│           ├── DeleteAccountButton.tsx
+│           └── edit/
+│               ├── page.tsx
+│               └── ResidentEditForm.tsx
 ├── components/
 │   ├── BottomNav.tsx
 │   ├── AttendanceToggle.tsx
 │   ├── PaymentButton.tsx
-│   ├── RateButtons.tsx
 │   ├── QuickApplyButton.tsx
 │   ├── DeleteJobButton.tsx
-│   ├── EndEngagementButton.tsx
-│   └── ClosedJobsSection.tsx
+│   └── EndEngagementButton.tsx
 ├── lib/
 │   ├── supabase/
 │   │   ├── client.ts                       # Browser client
@@ -161,40 +173,50 @@ society-helper-app/
 ├── middleware.ts                           # Session refresh on every request
 ├── next.config.js
 ├── tailwind.config.ts
-├── tsconfig.json
 └── package.json
 ```
+
+</details>
 
 ---
 
 ## Setup
 
-**1. Supabase**
-- Create a project at supabase.com
-- Copy the project URL and anon key
-- In the SQL editor, run `supabase/schema.sql` to create tables and RLS policies
-- Under Authentication → Providers, enable Phone (Supabase gives 30 free SMS/day; swap to Twilio or MSG91 later)
-- Under Authentication → URL Configuration, set your Site URL and add redirect URLs for your Vercel deployment
+### 1 · Supabase
 
-**2. Environment variables**
+- Create a project at [supabase.com](https://supabase.com)
+- In the SQL editor, run `supabase/schema.sql` to create all tables and RLS policies
+- Under **Authentication → Providers**, enable **Phone** *(30 free SMS/day; swap to Twilio or MSG91 later)*
+- Under **Authentication → URL Configuration**, set your Site URL and add your Vercel URLs to Redirect URLs:
 
-```bash
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+```
+https://your-app.vercel.app/**
+https://your-app-*.vercel.app/**
 ```
 
-**3. Run locally**
+### 2 · Environment Variables
+
+Create `.env.local` in the project root:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+### 3 · Run Locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-**4. Deploy**
-Push to `master` to deploy to production on Vercel. Push to `dev` or any other branch to get a preview deployment.
+### 4 · Deploy
+
+Push to `master` → production deployment on Vercel.
+Push to `dev` or any other branch → automatic preview deployment.
 
 ---
 
 ## Authentication
 
-Login is phone-number OTP only — no passwords to manage. On first login, users are sent through an onboarding flow where they choose their role (resident or worker) and fill in their details. From then on, the app remembers their role and shows the appropriate experience.
+Login is **phone-number OTP only** — no passwords. On first login, users go through an onboarding flow to pick their role (resident or worker) and fill in their details. Sessions are refreshed automatically on every request via Next.js middleware, so users stay logged in without interruption.
